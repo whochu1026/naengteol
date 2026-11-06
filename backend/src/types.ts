@@ -2,7 +2,7 @@ export type StorageType = "REFRIGERATED" | "FROZEN" | "ROOM";
 export type IngredientStatus = "ACTIVE" | "CONSUMED" | "DELETED";
 export type ConsumeOutcome = "USED" | "WASTED";
 export type Freshness = "FRESH" | "EXPIRING" | "EXPIRED" | "UNKNOWN";
-export type SortKey = "expirationDate" | "expirationDateDesc" | "name" | "createdAt";
+export type SortKey = "expirationDate" | "expirationDateDesc" | "name" | "createdAt" | "consumedAt";
 
 export interface NotificationSettings {
   enabled: boolean;

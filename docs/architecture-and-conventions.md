@@ -1,211 +1,406 @@
 # 아키텍처 · 컨벤션
 
-냉털 소스코드를 **어떻게 나누고**, **어떤 규칙으로** 작성했는지 정리한 문서입니다.  
-“구조 다이어그램 + 계층 역할 + 규칙 + 그 이유”를 한곳에 모았습니다.
+냉털 프로젝트의 소스 코드 구조와 개발 규칙, 각 설계의 선택 이유를 정리한 문서입니다.
 
-관련 문서: [architecture.md](./architecture.md)(런타임 요약), [conventions.md](./conventions.md)(체크리스트), [schema.md](./schema.md)(데이터)
+전체 아키텍처부터 디렉터리 구조, 계층별 책임, 네이밍 및 코드 스타일, 에러 처리와 인증 규칙까지 프로젝트 전반의 개발 기준을 정의합니다.
+
+관련 문서: [architecture.md](./architecture.md) (런타임 구조), [conventions.md](./conventions.md) (개발 체크리스트), [schema.md](./schema.md) (데이터 모델 및 상태 전이)
 
 ---
 
-## 1. 전체 구조 (프론트 · 백엔드 · 데이터)
+## 1. 전체 아키텍처
 
-인프라(클라우드 DB, K8s 등)는 구축하지 않았습니다. **로컬 웹 + API + JSON 파일**입니다.
+### 시스템 구성
+
+별도의 클라우드 인프라나 데이터베이스 서버 없이 **Next.js 웹 애플리케이션, Express API 서버, JSON 파일 저장소**로 구성했습니다.
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
 │  Browser (localhost:3000)                               │
 │  - App Router pages / View components                   │
-│  - Cookie: naengteol_token (HttpOnly, 서버 설정)         │
+│  - Cookie: naengteol_token (HttpOnly)                   │
 └───────────────────────────┬─────────────────────────────┘
-                            │  fetch /api/*  (same-origin)
+                            │
+                            │ fetch /api/* (same-origin)
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Next.js 16                                             │
 │  - UI 렌더링                                            │
-│  - rewrite: /api/* → http://127.0.0.1:4000/api/*        │
+│  - Rewrite: /api/* → http://127.0.0.1:4000/api/*        │
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Express API (localhost:4000)                           │
-│  routes → controllers → services → repositories         │
-│  Zod 검증 / JWT 미들웨어 / OpenAPI(/api/docs)           │
+│  - routes → controllers → services → repositories       │
+│  - Zod 기반 요청 검증                                   │
+│  - JWT 인증 미들웨어                                    │
+│  - OpenAPI 문서 (/api/docs)                             │
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│  JsonTable (원자적 파일 write)                           │
+│  JsonTable                                               │
+│  - JSON 파일 읽기 및 쓰기                               │
+│  - 임시 파일 기록 후 rename을 통한 원자적 교체          │
+│                                                         │
 │  users.json · categories.json · ingredients.json        │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**왜 이렇게 나눴는가**
+### 설계 의도
 
-- UI와 API를 분리해 계약(OpenAPI)·테스트를 백엔드에 고정하기 쉽다
-- Next rewrite로 개발 중 쿠키 도메인을 단순화한다
-- Repository 뒤에 JSON을 두어, 나중에 RDB로 바꿔도 Service 이상을 유지할 수 있다
+- **프론트엔드와 백엔드 분리**: UI와 API의 책임을 분리하고, OpenAPI를 통해 API 계약을 독립적으로 관리할 수 있도록 구성했습니다.
+- **Next.js Rewrite 활용**: `/api` 요청을 백엔드로 프록시하여 동일 출처 기반의 쿠키 인증 구조를 단순화했습니다.
+- **Repository 계층 분리**: 데이터 저장 방식을 Repository 뒤에 추상화하여 추후 JSON 파일을 RDB로 교체하더라도 Service 계층의 변경을 최소화할 수 있도록 구성했습니다.
 
 ---
 
-## 2. 디렉터리 구조와 계층 역할
+## 2. 디렉터리 구조 및 계층별 책임
 
 ### 저장소 루트
 
 ```text
 naengteol/
-├── frontend/     # Next.js 웹
-├── backend/      # Express API
-├── docs/         # 기획·아키텍처·스키마
-├── package.json  # concurrently로 동시 실행
+├── frontend/     # Next.js 웹 애플리케이션
+├── backend/      # Express API 서버
+├── docs/         # 기획 및 기술 문서
+├── package.json  # 개발 환경 실행 및 스크립트 관리
 └── README.md
 ```
 
-### 백엔드 (`backend/src/`)
+### 백엔드 구조 (`backend/src/`)
 
 ```text
-config/          환경 변수
-routes/          URL · HTTP 메서드 · requireAuth
-controllers/     요청/응답 어댑터 (Zod parse, res.json)
-services/        도메인 규칙 (소유권, 상태 전이, 통계)
-repositories/    JSON 영속화 (JsonTable)
-validators/      Zod 스키마
-middlewares/     인증 · 에러 핸들러
-utils/           expiration, cookies, AppError
+config/           환경 변수 및 서버 설정
+routes/           API 경로 및 HTTP 메서드 정의
+controllers/      요청 파싱 및 응답 처리
+services/         비즈니스 로직 및 도메인 규칙
+repositories/     JSON 데이터 접근 및 영속화
+validators/       Zod 기반 요청 스키마
+middlewares/      인증 및 공통 에러 처리
+utils/            공통 유틸리티 (expiration, cookies, AppError)
 ```
 
-| 계층 | 해도 되는 일 | 하지 않는 일 |
-|------|--------------|--------------|
-| Route | 경로 조립 | if문으로 비즈니스 |
-| Controller | 입력 파싱·상태코드 | 파일 I/O |
-| Service | 규칙·트랜잭션성 로직 | `req`/`res` 직접 사용 |
-| Repository | CRUD | freshness 계산 |
+### 백엔드 계층별 책임
 
-**이유:** CRUD 앱에서 흔한 “라우터에 로직 몰아넣기”를 피하고, 유통기한·폐기 같은 규칙을 한곳(`service`)에 모으기 위함입니다.
+| 계층 | 주요 역할 | 책임 범위에서 제외되는 작업 |
+|------|-----------|---------------------------|
+| Route | URL 및 HTTP 메서드 매핑, 미들웨어 연결 | 비즈니스 로직 처리 |
+| Controller | 요청 데이터 파싱, Service 호출, HTTP 응답 및 상태 코드 처리 | 파일 I/O 및 도메인 규칙 구현 |
+| Service | 비즈니스 규칙, 소유권 검증, 상태 전이, 통계 및 데이터 처리 | `req` / `res` 직접 접근 |
+| Repository | 데이터 조회, 생성, 수정 및 삭제 | 유통기한 및 신선도 계산 |
 
-### 프론트엔드 (`frontend/src/`)
+**설계 이유**
+
+CRUD 중심의 애플리케이션에서 비즈니스 로직이 라우터나 컨트롤러에 집중되는 것을 방지하기 위해 계층별 책임을 분리했습니다.
+
+특히 유통기한 계산, 소비·폐기 처리, 데이터 병합과 같은 도메인 규칙은 Service 계층에서 관리하여 여러 API에서 동일한 규칙을 재사용할 수 있도록 했습니다.
+
+### 프론트엔드 구조 (`frontend/src/`)
 
 ```text
-app/                 App Router (page는 얇게)
-  (main)/            로그인 후 레이아웃 + AppShell
-  login|signup/
-components/          *View, 식재료 다이얼로그, ui, filters
-lib/                 api.ts, types.ts, format.ts, notifications.ts
+app/
+  (main)/             로그인 후 접근하는 보호 영역 및 공통 레이아웃
+  login/              로그인 페이지
+  signup/             회원가입 페이지
+
+components/
+  *View               화면별 상태 및 UI 구성
+  dialogs/            식재료 관련 다이얼로그
+  ui/                 공통 UI 컴포넌트
+  filters/            검색 및 필터 컴포넌트
+
+lib/
+  api.ts              API 요청 공통 처리
+  types.ts            API 및 도메인 타입 정의
+  format.ts           날짜 및 데이터 포맷 유틸리티
+  notifications.ts    브라우저 알림 관련 로직
 ```
 
-| 규칙 | 내용 |
+### 프론트엔드 개발 규칙
+
+| 구분 | 규칙 |
 |------|------|
-| page.tsx | 메타데이터, View 마운트. `useSearchParams` 사용 시에만 `Suspense` |
-| *View.tsx | 상태·API·화면 분기 |
-| lib/api.ts | 유일한 HTTP 진입점 (`credentials: "include"`) |
+| `page.tsx` | 페이지 메타데이터 및 View 컴포넌트 마운트 담당 |
+| `useSearchParams` | 사용하는 페이지는 필요한 경우 `Suspense` 경계 적용 |
+| `*View.tsx` | 화면 상태, API 호출 및 UI 분기 처리 |
+| `lib/api.ts` | HTTP 요청을 처리하는 공통 진입점 (`credentials: "include"`) |
+| 공통 컴포넌트 | 여러 화면에서 재사용하는 UI 및 다이얼로그를 분리하여 관리 |
 
-**이유:** 같은 소비 다이얼로그를 대시보드·목록·계획에서 재사용하려면 페이지에 로직이 있으면 복붙이 늘어납니다.
+**설계 이유**
+
+페이지 컴포넌트에 상태 관리와 비즈니스 로직이 집중되는 것을 방지하고, 화면별 View 컴포넌트에서 관련 로직을 관리하도록 구성했습니다.
+
+특히 식재료 소비 다이얼로그처럼 대시보드, 목록, 소비 계획 등 여러 화면에서 사용하는 기능은 공통 컴포넌트로 분리하여 코드 중복을 줄이고 일관된 동작을 유지하도록 했습니다.
 
 ---
 
-## 3. 네이밍 · 코드 스타일 · 커밋
+## 3. 네이밍 · 코드 스타일 · 커밋 규칙
 
-### 네이밍
+### 네이밍 규칙
 
-| 대상 | 규칙 | 예 |
-|------|------|-----|
-| TS 변수/함수 | camelCase | `daysLeftOf`, `quickTemplates` |
-| 타입/컴포넌트 | PascalCase | `Ingredient`, `PlanView` |
-| 파일 | 역할 접미사 | `ingredient.service.ts`, `auth.routes.ts` |
-| API 경로 | 복수 명사 + 행위 서브패스 | `/ingredients/:id/consume` |
-| 상태 enum | UPPER_SNAKE | `ACTIVE`, `WASTED` |
+| 대상 | 규칙 | 예시 |
+|------|------|------|
+| 변수 및 함수 | camelCase | `daysLeftOf`, `quickTemplates` |
+| 타입 및 컴포넌트 | PascalCase | `Ingredient`, `PlanView` |
+| 파일명 | 역할 기반 접미사 | `ingredient.service.ts`, `auth.routes.ts` |
+| API 경로 | 복수형 리소스 + 행위별 서브 경로 | `/ingredients/:id/consume` |
+| 상태 및 상수 | UPPER_SNAKE_CASE | `ACTIVE`, `WASTED` |
 
-### 코드 스타일
+### 코드 스타일 및 공통 규칙
 
-- TypeScript `strict`
-- 사용자 메시지·UI 카피: **한국어**
-- 서버 날짜 계산: 반드시 `utils/expiration.ts` (Asia/Seoul)
-- 프론트 스타일: Tailwind 유틸리티, 공통 버튼/모달은 `components/ui.tsx`
+- **TypeScript**: `strict` 모드를 기반으로 타입 안정성을 유지합니다.
+- **UI 및 메시지**: 사용자에게 노출되는 화면 문구와 에러 메시지는 한국어로 작성합니다.
+- **날짜 계산**: 서버의 유통기한 및 신선도 계산은 `utils/expiration.ts`를 기준으로 하며, Asia/Seoul 시간대를 적용합니다.
+- **스타일링**: Tailwind CSS 유틸리티를 사용하고, 공통 버튼과 모달은 재사용 가능한 UI 컴포넌트로 관리합니다.
+- **API 호출**: 프론트엔드의 HTTP 요청은 `lib/api.ts`를 통해 처리합니다.
 
-### 커밋 메시지 (권장)
+### 커밋 메시지 규칙
+
+작업 유형을 구분할 수 있도록 Conventional Commits 형식을 참고합니다.
 
 ```text
 feat: 식재료 부분 소비 API 추가
-fix: 데스크톱 네비 항목 축소
-docs: 기획서·아키텍처 문서 보강
-test: 폐기(outcome) 통합 테스트
+fix: 데스크톱 네비게이션 항목 축소
+docs: 기획서 및 아키텍처 문서 보강
+test: 폐기(outcome) 통합 테스트 추가
 ```
 
-- 제목은 명령형·한 줄, **왜**가 필요하면 본문에 작성
-- 문서만 바꾼 경우 `docs:` 로 구분
+- 제목은 작업 내용을 명확하게 나타내는 한 줄로 작성합니다.
+- 제목은 변경 사항을 설명하는 간결한 문장으로 작성합니다.
+- 변경 이유나 배경 설명이 필요한 경우 본문에 추가합니다.
+- 문서만 수정한 경우 `docs:` 접두사를 사용합니다.
 
 ---
 
-## 4. 에러 처리와 입력 검증
+## 4. 에러 처리 및 입력 검증
 
-### 검증
+### 요청 데이터 검증
 
-1. 요청 body/query → **Zod** (`validators/schemas.ts`)
-2. 실패 시 `AppError(400, "입력값을 확인해 주세요.", fieldErrors)`
-3. 컨트롤러는 `parseInput(schema, payload)`만 호출
+클라이언트에서 전달되는 요청 데이터는 Zod 스키마를 기준으로 검증합니다.
 
-### 에러 응답 형식
+처리 흐름은 다음과 같습니다.
+
+1. 요청의 Body 및 Query 데이터를 전달받습니다.
+2. `validators/schemas.ts`에 정의된 Zod 스키마로 유효성을 검증합니다.
+3. 검증에 실패하면 `AppError`를 발생시키고 필드별 오류 정보를 전달합니다.
+4. 컨트롤러는 `parseInput(schema, payload)`를 통해 검증된 데이터를 전달받아 Service를 호출합니다.
+
+검증 실패 예시:
+
+```ts
+AppError(
+  400,
+  "입력값을 확인해 주세요.",
+  fieldErrors
+);
+```
+
+### API 응답 규격
+
+**성공 응답**
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+**실패 응답**
 
 ```json
 {
   "success": false,
   "message": "보유 중인 식재료만 소비할 수 있습니다.",
-  "errors": [{ "field": "quantity", "message": "수량은 0보다 커야 합니다." }]
+  "errors": [
+    {
+      "field": "quantity",
+      "message": "수량은 0보다 커야 합니다."
+    }
+  ]
 }
 ```
 
-성공은 항상 `{ "success": true, "data": ... }`.
+모든 API는 공통 응답 구조를 따르며, 필드 단위 오류가 필요한 경우 `errors` 배열에 상세 내용을 전달합니다.
 
-### 처리 위치
+### 에러 유형별 처리 기준
 
-| 종류 | 처리 |
+| 유형 | HTTP 상태 코드 | 처리 기준 |
+|------|---------------|-----------|
+| 입력값 검증 실패 | 400 | Zod 검증 오류 및 필드별 상세 메시지 반환 |
+| 미인증 및 인증 실패 | 401 | 로그인 필요 또는 인증 실패 처리 |
+| 리소스 없음 및 소유권 불일치 | 404 | 리소스 존재 여부 노출 최소화 |
+| 잘못된 상태 전이 | 400 | 허용되지 않는 도메인 상태 변경 차단 |
+| 예상하지 못한 서버 오류 | 500 | `errorHandler`에서 공통 처리 및 일반화된 메시지 반환 |
+
+### 프론트엔드 에러 처리
+
+- `lib/api.ts`에서 서버 응답을 `ApiError` 형태로 변환합니다.
+- 폼 검증 오류는 `errors[].field`를 기준으로 해당 입력 필드에 표시합니다.
+- 공통 오류 응답 구조를 활용하여 화면별 에러 처리 방식을 일관되게 유지합니다.
+
+**설계 이유**
+
+API 응답과 에러 형식을 통일하여 동일한 유형의 오류가 서로 다른 형태로 전달되는 것을 방지했습니다.
+
+또한 필드별 오류 정보를 제공하여 사용자가 문제가 발생한 입력 항목을 즉시 확인하고 수정할 수 있도록 했습니다.
+
+---
+
+## 5. 인증 및 세션 관리 규칙
+
+### 인증 방식
+
+- **인증 방식**: JWT 기반 인증
+- **토큰 저장 위치**: HttpOnly 쿠키 (`naengteol_token`)
+- **클라이언트 저장 방식**: localStorage에 인증 토큰을 저장하지 않음
+- **쿠키 관리**: 서버에서 쿠키 생성 및 만료 처리
+
+### JWT 페이로드
+
+| 필드 | 설명 |
 |------|------|
-| 검증 실패 | Zod → 400 + field errors |
-| 권한/미로그인 | 401 |
-| 없거나 타인 리소스 | 404 (존재 여부 누수 최소화) |
-| 잘못된 상태 전이 | 400 (예: ACTIVE가 아닌데 consume) |
-| 그 외 | `errorHandler`에서 500 메시지 일반화 |
+| `sub` | 사용자 ID |
+| `email` | 사용자 이메일 |
+| `ver` | 토큰 발급 당시의 `tokenVersion` |
 
-프론트는 `lib/api.ts`에서 `ApiError`로 변환하고, 폼은 `errors[].field`로 필드 하이라이트합니다.
+### 토큰 무효화
 
-**이유:** “메시지 문자열만 다른” 에러를 막기 위해 형식을 고정했고, 필드 에러는 UX(어느 칸이 틀렸는지)에 바로 씁니다.
+로그아웃, 비밀번호 변경 및 회원 탈퇴 시 사용자의 `tokenVersion`을 증가시킵니다.
 
----
+이후 인증 요청에서 JWT에 포함된 `ver`와 사용자 데이터의 현재 `tokenVersion`을 비교하여 일치하지 않는 기존 토큰을 무효화합니다.
 
-## 5. 인증 규칙
+### 데모 로그인
 
-- JWT를 **HttpOnly 쿠키** `naengteol_token`에 저장 (localStorage 금지)
-- 페이로드: `sub`(userId), `email`, `ver`(tokenVersion)
-- 로그아웃·비밀번호 변경·탈퇴 시 `tokenVersion` 증가 → 기존 토큰 무효
-- 데모 계정: `POST /api/auth/demo` (`DEMO_LOGIN=false`로 끌 수 있음)
+- API: `POST /api/auth/demo`
+- 환경 변수: `DEMO_LOGIN`
+- 기본값: `true`
+- 비활성화: `DEMO_LOGIN=false`
 
-**이유:** XSS로 토큰이 바로 탈취되기 쉬운 저장 방식을 피하고, 과제 시연용 데모 진입을 남깁니다.
+데모 로그인은 별도의 회원가입 없이 서비스 기능을 체험할 수 있도록 제공하며, 환경 변수로 사용 여부를 제어합니다.
 
----
+**설계 이유**
 
-## 6. 데이터·도메인 규칙 (코드와 일치)
+JWT를 HttpOnly 쿠키에 저장하여 클라이언트 JavaScript에서 토큰에 직접 접근할 수 없도록 구성했습니다.
 
-- soft delete: `DELETE` → `DELETED`, 영구 삭제는 `POST .../purge`
-- 소비: `outcome=USED|WASTED`, 부분 소비는 USED만 허용
-- 신선도: 저장하지 않고 조회 시 계산 (서울 날짜)
-- 카테고리: 전역 시드 8종 (사용자 커스텀 없음 — MVP)
-
-상세는 [schema.md](./schema.md), 기획 우선순위는 [planning.md](./planning.md).
+또한 `tokenVersion`을 활용해 토큰 만료 시점까지 기다리지 않고 로그아웃 및 계정 변경 시 기존 인증 정보를 무효화할 수 있도록 했습니다.
 
 ---
 
-## 7. 테스트 · 문서 동기화
+## 6. 데이터 및 도메인 규칙
 
-- `npm test` — 유통기한 유틸 + HTTP 통합 테스트
-- API 계약 — `backend/openapi.yaml` / `/api/docs`
-- 기획·README·이 문서의 용어(`ACTIVE`, `outcome`, 먹을 것, 절약률)를 코드와 맞춰 유지
+서비스 전반에서 일관된 데이터 처리를 위해 다음 규칙을 적용합니다.
 
----
+### 식재료 상태 관리
 
-## 8. 의식적으로 지키지 않은 것
-
-| 항목 | 이유 |
+| 상태 | 설명 |
 |------|------|
-| Vue / Nest 권장 스택 | 익숙한 Next+Express로 완성도·문서 일치에 시간 배분 |
-| Electron | 웹으로도 CRUD·일상 사용 시나리오 충족 |
-| LLM MCP | 핵심 문제(재고·기한)와 직접 관련 낮음, 범위 비대화 방지 |
-| 엄격한 monorepo workspace | 루트는 실행만 오케스트레이션, 패키지는 독립 install |
+| `ACTIVE` | 현재 보유 중인 식재료 |
+| `CONSUMED` | 소비 또는 폐기가 완료된 식재료 |
+| `DELETED` | 휴지통으로 이동한 식재료 |
+
+- **삭제**: `DELETE` 요청 시 실제 데이터를 제거하지 않고 `DELETED` 상태로 변경합니다.
+- **복구**: 휴지통에 있는 데이터를 기존 보유 상태로 복구합니다.
+- **영구 삭제**: `POST .../purge` 요청으로 데이터를 영구적으로 제거합니다.
+
+### 소비 및 폐기 규칙
+
+- 소비 완료 데이터는 `CONSUMED` 상태로 관리합니다.
+- 소비 결과는 `outcome` 필드로 구분합니다.
+  - `USED`: 정상적으로 소비한 식재료
+  - `WASTED`: 폐기한 식재료
+- 부분 소비는 `USED` 결과에 대해서만 허용합니다.
+
+### 유통기한 및 신선도 계산
+
+- 유통기한은 `YYYY-MM-DD` 형식으로 저장합니다.
+- 신선도 상태는 별도로 저장하지 않고 조회 시점에 계산합니다.
+- 모든 유통기한 계산은 Asia/Seoul 기준 달력일을 적용합니다.
+
+| 조건 | 신선도 상태 |
+|------|------------|
+| 4일 이상 남음 | `FRESH` |
+| 0~3일 남음 | `EXPIRING` |
+| 유통기한 경과 | `EXPIRED` |
+| 유통기한 미입력 | `UNKNOWN` |
+
+### 카테고리 관리
+
+- 기본 카테고리 8종을 전역 데이터로 관리합니다.
+- 사용자별 카테고리 생성 및 수정은 지원하지 않습니다.
+- CSV 가져오기 및 검색·필터에서 동일한 카테고리 기준을 사용합니다.
+
+**설계 이유**
+
+식재료의 보유, 소비 완료, 삭제 상태를 분리하고 소비 결과를 별도 필드로 관리하여 데이터 상태 전이와 통계 집계를 단순화했습니다.
+
+또한 유통기한에 따른 신선도는 조회 시점에 계산하여 날짜가 변경되더라도 최신 기준의 상태를 제공하도록 구성했습니다.
+
+상세 데이터 구조 및 상태 전이도는 [schema.md](./schema.md)를 참고하세요.
+
+---
+
+## 7. 테스트 및 문서 동기화
+
+### 테스트 기준
+
+| 구분 | 내용 |
+|------|------|
+| 실행 명령어 | `npm test` |
+| 단위 테스트 | 유통기한 및 신선도 계산 유틸리티 |
+| 통합 테스트 | HTTP API 요청 및 응답, 주요 도메인 처리 |
+| API 문서 | `backend/openapi.yaml` 및 `/api/docs` |
+
+### 문서 동기화 규칙
+
+다음 문서와 실제 소스 코드의 내용이 일치하도록 유지합니다.
+
+- **README**: 프로젝트 소개, 실행 방법, 기술 스택 및 주요 기능
+- **planning.md**: 기능 요구사항, 우선순위 및 고도화 계획
+- **schema.md**: 데이터 모델, 필드 정의 및 상태 전이
+- **architecture-and-conventions.md**: 시스템 구조, 계층별 책임 및 개발 규칙
+- **openapi.yaml**: API 요청 및 응답 규격
+
+특히 다음 도메인 용어는 문서와 코드에서 동일하게 사용합니다.
+
+- 식재료 상태: `ACTIVE`, `CONSUMED`, `DELETED`
+- 소비 결과: `USED`, `WASTED`
+- 신선도 상태: `FRESH`, `EXPIRING`, `EXPIRED`, `UNKNOWN`
+- 주요 기능: 먹을 것, 소비·폐기, 절약률
+
+**설계 이유**
+
+기능 변경이나 데이터 구조 수정 시 문서와 코드 간 불일치가 발생하지 않도록 각 문서의 역할을 구분하고, 변경된 규칙을 관련 문서에도 함께 반영합니다.
+
+---
+
+## 8. 기술 스택 및 아키텍처 확장 방향
+
+### MVP에서 적용하지 않은 기술
+
+프로젝트 요구사항에서 제시된 기술 중 MVP의 핵심 기능 구현에 직접적인 영향을 주지 않는 항목은 검토 후 적용 범위에서 제외했습니다.
+
+| 항목 | 선택하지 않은 이유 |
+|------|-------------------|
+| Vue / NestJS | 익숙한 Next.js와 Express를 활용하여 개발 속도와 구현 완성도를 높이는 데 집중 |
+| 엄격한 Monorepo Workspace | 패키지별 독립적인 설치 구조를 유지하고, 루트에서는 개발 서버 실행만 통합 관리 |
+
+### 우대 기술: Electron · LLM MCP
+
+Electron과 LLM MCP는 향후 서비스 확장을 고려해 도입 가능성을 검토했으나, MVP에서는 웹 기반 핵심 기능의 완성도를 우선했습니다.
+
+| 기술 | 확장 시 기대 효과 | MVP에서 제외한 이유 | 향후 적용 방향 |
+|------|-----------------|-------------------|----------------|
+| **Electron** | 데스크톱 앱, 시스템 트레이, 백그라운드 알림 및 로컬 파일 연동 | 데스크톱 패키징, OS 권한 및 업데이트 관리 등 추가 구현 비용이 발생하며, 핵심 기능은 웹 환경에서도 충분히 제공 가능 | 기존 프론트엔드를 Electron으로 패키징하고 OS 알림 및 시스템 트레이 기능 추가 |
+| **LLM MCP** | 자연어 기반 식재료 조회, 소비 처리 및 메뉴 추천 | MCP 도구 설계와 AI 에이전트 연동이 추가되면 MVP의 구현 및 테스트 범위가 확대될 수 있음 | 기존 식재료 REST API를 MCP 도구로 연결하여 자연어 기반 서비스 제공 |
+
+### 향후 확장 구조
+
+- **Electron**: 기존 웹 프론트엔드를 데스크톱 애플리케이션으로 확장하고, 백그라운드 알림 및 시스템 트레이 기능 추가
+- **LLM MCP**: 기존 식재료 조회·등록·소비 API를 MCP 도구로 연결하여 자연어 기반 재고 관리 및 메뉴 추천 지원
+
+기존 API와 도메인 로직을 유지하면서 별도의 연동 계층을 추가하는 방향으로 확장할 수 있도록 설계했습니다.
+
+향후 기능별 우선순위 및 상세 계획은 [planning.md §10](./planning.md)을 참고하세요.

@@ -2,7 +2,7 @@ export type StorageType = "REFRIGERATED" | "FROZEN" | "ROOM";
 export type IngredientStatus = "ACTIVE" | "CONSUMED" | "DELETED";
 export type ConsumeOutcome = "USED" | "WASTED";
 export type Freshness = "FRESH" | "EXPIRING" | "EXPIRED" | "UNKNOWN";
-export type SortKey = "expirationDate" | "expirationDateDesc" | "name" | "createdAt";
+export type SortKey = "expirationDate" | "expirationDateDesc" | "name" | "createdAt" | "consumedAt";
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -82,9 +82,16 @@ export interface FreshnessCounts {
   unknown: number;
 }
 
+export interface OutcomeCounts {
+  total: number;
+  used: number;
+  wasted: number;
+}
+
 export interface IngredientList {
   items: Ingredient[];
   counts: FreshnessCounts;
+  outcomeCounts?: OutcomeCounts;
   pagination: {
     page: number;
     limit: number;

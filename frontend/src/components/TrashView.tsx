@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { Button, Card, ConfirmDialog, EmptyState, ErrorBanner, FormMessage, LoadingBlock, PageHeader } from "@/components/ui";
+import { Button, Card, ConfirmDialog, EmptyState, ErrorBanner, LoadingBlock, PageHeader, Toast, useToastNotice } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDate, quantityLabel } from "@/lib/format";
 import type { Ingredient } from "@/lib/types";
@@ -12,7 +12,7 @@ export function TrashView() {
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useToastNotice();
   const [pending, setPending] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<null | { ids: string[]; label: string }>(null);
 
@@ -79,7 +79,7 @@ export function TrashView() {
         description="삭제한 식재료를 복구하거나 영구 삭제할 수 있습니다."
         action={
           selected.length > 0 ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" disabled={pending} onClick={() => restoreIds(selected)}>
                 복구 ({selected.length})
               </Button>
@@ -96,7 +96,7 @@ export function TrashView() {
           ) : undefined
         }
       />
-      {notice ? <FormMessage>{notice}</FormMessage> : null}
+      <Toast message={notice} />
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
       {loading ? <LoadingBlock /> : null}
       {!loading && items.length === 0 ? (
@@ -110,26 +110,34 @@ export function TrashView() {
         <Card className="overflow-hidden p-0">
           <ul className="divide-y divide-slate-100">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center gap-3 px-4 py-3 md:px-5">
-                <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} className="size-4 accent-brand" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-slate-800">{item.name}</p>
-                  <p className="mt-0.5 text-sm text-muted">
-                    {item.categoryName} · {quantityLabel(item.quantity, item.unit)} · {formatDate(item.expirationDate)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button type="button" variant="secondary" disabled={pending} onClick={() => restoreIds([item.id])}>
-                    복구
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outlineDanger"
-                    disabled={pending}
-                    onClick={() => setPurgeTarget({ ids: [item.id], label: item.name })}
-                  >
-                    영구 삭제
-                  </Button>
+              <li key={item.id} className="flex items-start gap-3 px-4 py-3 md:items-center md:px-5">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.id)}
+                  onChange={() => toggle(item.id)}
+                  className="mt-1 size-4 shrink-0 accent-brand md:mt-0"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center md:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium break-keep text-slate-800">{item.name}</p>
+                    <p className="mt-0.5 text-sm break-keep text-muted">
+                      {item.categoryName} · {quantityLabel(item.quantity, item.unit)} · {formatDate(item.expirationDate)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2 md:shrink-0">
+                    <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => restoreIds([item.id])}>
+                      복구
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outlineDanger"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => setPurgeTarget({ ids: [item.id], label: item.name })}
+                    >
+                      영구 삭제
+                    </Button>
+                  </div>
                 </div>
               </li>
             ))}

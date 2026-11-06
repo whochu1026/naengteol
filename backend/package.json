@@ -6,7 +6,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "tsx --test src/utils/expiration.test.ts src/app.integration.test.ts"
+    "test": "tsx --test src/utils/expiration.test.ts src/app.integration.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

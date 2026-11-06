@@ -67,7 +67,7 @@ paths:
       tags: [Auth]
       summary: 데모 로그인
       description: |
-        `demo@naengteol.local` 계정으로 즉시 로그인한다.
+        세션마다 새 데모 사용자·샘플 냉장고를 만들어 즉시 로그인한다.
         서버 환경변수 `DEMO_LOGIN=false`이면 404를 반환한다.
       responses:
         "200":
@@ -195,14 +195,26 @@ paths:
           name: freshness
           schema: { $ref: "#/components/schemas/Freshness" }
         - in: query
+          name: outcome
+          description: CONSUMED 목록에서 먹음/폐기 필터
+          schema:
+            type: string
+            enum: [USED, WASTED]
+        - in: query
+          name: consumedWithin
+          description: 소비일 기준 N일 이내
+          schema: { type: integer, minimum: 0, maximum: 365 }
+        - in: query
           name: dueWithin
-          description: 유통기한까지 남은 일수가 N일 이하인 항목만
+          description: >
+            유통기한 임박 필터. 0이면 당일(daysLeft === 0)만,
+            1 이상이면 이미 지난 항목 포함 daysLeft ≤ N.
           schema: { type: integer, minimum: 0, maximum: 30 }
         - in: query
           name: sort
           schema:
             type: string
-            enum: [expirationDate, expirationDateDesc, name, createdAt]
+            enum: [expirationDate, expirationDateDesc, name, createdAt, consumedAt]
             default: expirationDate
         - in: query
           name: page
@@ -292,9 +304,12 @@ paths:
               required: [csv]
               properties:
                 csv: { type: string }
+                dryRun:
+                  type: boolean
+                  description: true면 저장하지 않고 미리보기만 반환
       responses:
-        "201":
-          description: 가져오기 결과
+        "200":
+          description: 가져오기 또는 dryRun 미리보기 결과
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":

@@ -44,12 +44,22 @@ export function StatsView() {
             <StatCard label="만료 보유" value={data.expiredActive} tone="text-red-600" />
             <StatCard label="7일 이내" value={data.dueSoon} tone="text-amber-600" />
           </section>
-          <p className="text-sm text-muted">
-            절약률은 먹음 ÷ (먹음 + 폐기)입니다.
-            {data.savedRate === null
-              ? " 아직 소비·폐기 이력이 없으면 표시되지 않습니다."
-              : ` 지금까지 먹음 ${data.used}개 · 폐기 ${data.wasted}개 기준입니다.`}
-          </p>
+          <div className="space-y-2 text-sm leading-6 break-keep text-pretty text-muted">
+            <p>절약률은 먹음 ÷ (먹음 + 폐기)입니다.</p>
+            {data.savedRate === null ? (
+              <p>아직 소비·폐기 이력이 없으면 표시되지 않습니다.</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span>지금까지 기준</span>
+                <span className="inline-flex items-center rounded-full bg-brand-light border border-brand-dark text-brand-dark px-2.5 py-0.5 text-xs font-semibold tabular-nums">
+                  먹음 {data.used}개
+                </span>
+                <span className="inline-flex items-center rounded-full bg-red-50 border border-red-600 text-red-600 px-2.5 py-0.5 text-xs font-semibold tabular-nums">
+                  폐기 {data.wasted}개
+                </span>
+              </div>
+            )}
+          </div>
           <Card className="p-5 md:p-6">
             <h2 className="text-base font-semibold text-foreground">카테고리별</h2>
             {data.byCategory.length === 0 ? (

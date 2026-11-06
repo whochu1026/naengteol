@@ -29,7 +29,12 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "expirationDateDesc", label: "유통기한 늦은 순" },
   { value: "name", label: "이름순" },
   { value: "createdAt", label: "최근 등록순" },
+  { value: "consumedAt", label: "최근 소비순" },
 ];
+
+export function isDemoEmail(email: string) {
+  return /^demo(?:-[a-z0-9]+)?@naengteol\.local$/i.test(email.trim());
+}
 
 export const UNITS = ["개", "g", "kg", "ml", "L", "봉", "팩", "병"];
 

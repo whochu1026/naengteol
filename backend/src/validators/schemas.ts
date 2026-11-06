@@ -152,13 +152,17 @@ export const listIngredientQuerySchema = z.object({
   freshness: z.preprocess(emptyToUndefined, z.enum(["FRESH", "EXPIRING", "EXPIRED", "UNKNOWN"]).optional()) as z.ZodType<
     "FRESH" | "EXPIRING" | "EXPIRED" | "UNKNOWN" | undefined
   >,
+  outcome: z.preprocess(emptyToUndefined, z.enum(["USED", "WASTED"]).optional()) as z.ZodType<"USED" | "WASTED" | undefined>,
+  consumedWithin: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(365).optional()) as z.ZodType<
+    number | undefined
+  >,
   dueWithin: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(30).optional()) as z.ZodType<
     number | undefined
   >,
   sort: z.preprocess(
     emptyToUndefined,
-    z.enum(["expirationDate", "expirationDateDesc", "name", "createdAt"]).optional(),
-  ) as z.ZodType<"expirationDate" | "expirationDateDesc" | "name" | "createdAt" | undefined>,
+    z.enum(["expirationDate", "expirationDateDesc", "name", "createdAt", "consumedAt"]).optional(),
+  ) as z.ZodType<"expirationDate" | "expirationDateDesc" | "name" | "createdAt" | "consumedAt" | undefined>,
   page: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).optional()) as z.ZodType<number | undefined>,
   limit: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).max(100).optional()) as z.ZodType<
     number | undefined
@@ -185,6 +189,7 @@ export const mergeSchema = z.object({
 
 export const importSchema = z.object({
   csv: z.string({ required_error: "CSV 내용을 입력해 주세요." }).min(1, "CSV 내용을 입력해 주세요.").max(500_000),
+  dryRun: z.boolean().optional(),
 });
 
 export function parseInput<T>(schema: z.ZodType<T>, payload: unknown): T {

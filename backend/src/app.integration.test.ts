@@ -84,8 +84,11 @@ test("냉털 MVP 흐름", async (t) => {
 
   const demo = await call(port, "/api/auth/demo", { method: "POST" });
   assert.equal(demo.status, 200);
-  assert.equal(demo.body.data.email, "demo@naengteol.local");
+  assert.match(demo.body.data.email, /^demo-[a-z0-9]+@naengteol\.local$/i);
   assert.ok(demo.cookie);
+  const demoB = await call(port, "/api/auth/demo", { method: "POST" });
+  assert.equal(demoB.status, 200);
+  assert.notEqual(demo.body.data.email, demoB.body.data.email);
 
   const signup = await call(port, "/api/auth/signup", {
     method: "POST",

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { IngredientForm } from "@/components/IngredientForm";
 import { Button, ErrorBanner, Field, FormMessage, Input, LoadingBlock, Modal } from "@/components/ui";
 import { api } from "@/lib/api";
 import { quantityLabel, STORAGE_LABEL } from "@/lib/format";
 import type { Category, Ingredient, IngredientInput, QuickTemplate } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type Draft = Partial<Ingredient> & {
   name: string;
@@ -33,6 +34,8 @@ export function IngredientCreateDialog({
   const [templates, setTemplates] = useState<QuickTemplate[]>([]);
   const [draft, setDraft] = useState<Partial<Ingredient> | undefined>(initial);
   const [quickMode, setQuickMode] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templatesUserToggled, setTemplatesUserToggled] = useState(false);
   const [expirationDate, setExpirationDate] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -40,8 +43,11 @@ export function IngredientCreateDialog({
 
   useEffect(() => {
     if (!open) return;
+    const isQuick = Boolean(initial?.name && initial?.categoryId && initial?.unit && initial?.storageType);
     setDraft(initial);
-    setQuickMode(Boolean(initial?.name && initial?.categoryId && initial?.unit && initial?.storageType));
+    setQuickMode(isQuick);
+    setTemplatesOpen(false);
+    setTemplatesUserToggled(false);
     setExpirationDate("");
     setFieldError("");
     setError("");
@@ -76,6 +82,11 @@ export function IngredientCreateDialog({
     };
   }, [open, showTemplates]);
 
+  useEffect(() => {
+    if (!open || !showTemplates || templatesUserToggled) return;
+    setTemplatesOpen(templates.length > 0 && !quickMode);
+  }, [open, showTemplates, templates, quickMode, templatesUserToggled]);
+
   if (!open) return null;
 
   function selectTemplate(template: QuickTemplate) {
@@ -90,8 +101,21 @@ export function IngredientCreateDialog({
       memo: null,
     });
     setQuickMode(true);
+    setTemplatesOpen(false);
+    setTemplatesUserToggled(false);
     setExpirationDate("");
     setFieldError("");
+  }
+
+  function exitQuickMode() {
+    setQuickMode(false);
+    setTemplatesUserToggled(false);
+    setTemplatesOpen(templates.length > 0);
+  }
+
+  function toggleTemplates() {
+    setTemplatesUserToggled(true);
+    setTemplatesOpen((value) => !value);
   }
 
   async function onSubmit(values: IngredientInput) {
@@ -130,14 +154,62 @@ export function IngredientCreateDialog({
     quickDraft &&
     Boolean(quickDraft.name && quickDraft.categoryId && quickDraft.unit && quickDraft.storageType && quickDraft.quantity);
 
+  const templatesBlock = showTemplates ? (
+    <div className="border-b border-slate-100 px-5 py-3 md:px-7">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-control)] py-1 text-left hover:bg-brand-light/40"
+        aria-expanded={templatesOpen}
+        onClick={toggleTemplates}
+      >
+        <span className="text-sm font-semibold text-slate-800">
+          빠른 재등록
+          {templates.length > 0 ? <span className="ml-1.5 font-medium text-muted">· {templates.length}</span> : null}
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted transition-transform", templatesOpen && "rotate-180")} aria-hidden="true" />
+      </button>
+      {templatesOpen ? (
+        templates.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">아직 재등록할 이력이 없습니다. 식재료를 등록·소비하면 여기에 모입니다.</p>
+        ) : (
+          <>
+            <p className="mt-1 text-xs text-muted">재료를 고르면 유통기한만 묻는 짧은 화면으로 바뀝니다.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {templates.map((template) => (
+                <Button
+                  key={`${template.name}-${template.categoryId}-${template.unit}-${template.storageType}`}
+                  type="button"
+                  variant="chip"
+                  selected={
+                    draft?.name === template.name &&
+                    draft?.categoryId === template.categoryId &&
+                    draft?.unit === template.unit &&
+                    draft?.storageType === template.storageType
+                  }
+                  onClick={() => selectTemplate(template)}
+                >
+                  {template.name}
+                  <span className="ml-1 text-xs opacity-70">
+                    {quantityLabel(template.quantity, template.unit)} · {STORAGE_LABEL[template.storageType]}
+                    {template.count > 1 ? ` · ${template.count}회` : ""}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          </>
+        )
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <Modal
       titleId="ingredient-create-title"
       onClose={onClose}
-      panelClassName="flex max-h-[90vh] w-full max-w-2xl cursor-default flex-col overflow-hidden rounded-3xl bg-white shadow-xl"
+      panelClassName="flex max-h-[90vh] w-full max-w-2xl cursor-default flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-soft)]"
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 md:px-7 md:py-5">
-        <div className="min-w-0 pr-2">
+      <header className="shrink-0 border-b border-slate-100 bg-surface px-5 py-4 pr-14 md:px-7 md:py-5">
+        <div className="min-w-0">
           <h2 id="ingredient-create-title" className="flex items-center gap-2 text-lg font-semibold text-slate-800">
             <Plus className="size-5 text-brand" />
             {canQuick ? "빠른 재등록" : "식재료 등록"}
@@ -148,9 +220,6 @@ export function IngredientCreateDialog({
               : "이름, 수량, 보관 장소는 필수이며, 자주 쓰는 재료는 아래에서 바로 고를 수 있습니다."}
           </p>
         </div>
-        <Button type="button" variant="quiet" size="icon" aria-label="닫기" onClick={onClose}>
-          <X />
-        </Button>
       </header>
 
       {error ? (
@@ -164,61 +233,29 @@ export function IngredientCreateDialog({
         </div>
       ) : null}
       {categories ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {showTemplates ? (
-            <div className="border-b border-slate-100 px-5 py-4 md:px-7">
-              <p className="text-sm font-semibold text-slate-800">빠른 재등록</p>
-              {templates.length === 0 ? (
-                <p className="mt-2 text-sm text-muted">아직 재등록할 이력이 없습니다. 식재료를 등록·소비하면 여기에 모입니다.</p>
-              ) : (
-                <>
-                  <p className="mt-1 text-xs text-muted">재료를 고르면 유통기한만 묻는 짧은 화면으로 바뀝니다.</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {templates.map((template) => (
-                      <Button
-                        key={`${template.name}-${template.categoryId}-${template.unit}-${template.storageType}`}
-                        type="button"
-                        variant="chip"
-                        selected={
-                          draft?.name === template.name &&
-                          draft?.categoryId === template.categoryId &&
-                          draft?.unit === template.unit &&
-                          draft?.storageType === template.storageType
-                        }
-                        onClick={() => selectTemplate(template)}
-                      >
-                        {template.name}
-                        <span className="ml-1 text-xs opacity-70">
-                          {quantityLabel(template.quantity, template.unit)} · {STORAGE_LABEL[template.storageType]}
-                          {template.count > 1 ? ` · ${template.count}회` : ""}
-                        </span>
-                      </Button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : null}
-
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {canQuick && quickDraft ? (
-            <form onSubmit={submitQuick} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 md:px-7">
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                  <p className="font-medium text-slate-800">{quickDraft.name}</p>
-                  <p className="mt-1 text-muted">
-                    {quantityLabel(quickDraft.quantity, quickDraft.unit)} · {STORAGE_LABEL[quickDraft.storageType]}
-                    {categories.find((category) => category.id === quickDraft.categoryId)
-                      ? ` · ${categories.find((category) => category.id === quickDraft.categoryId)?.name}`
-                      : ""}
-                  </p>
+            <form onSubmit={submitQuick} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {templatesBlock}
+                <div className="space-y-4 px-5 py-5 md:px-7">
+                  <div className="rounded-[var(--radius-control)] bg-slate-50 px-4 py-3 text-sm">
+                    <p className="font-medium text-slate-800">{quickDraft.name}</p>
+                    <p className="mt-1 text-muted">
+                      {quantityLabel(quickDraft.quantity, quickDraft.unit)} · {STORAGE_LABEL[quickDraft.storageType]}
+                      {categories.find((category) => category.id === quickDraft.categoryId)
+                        ? ` · ${categories.find((category) => category.id === quickDraft.categoryId)?.name}`
+                        : ""}
+                    </p>
+                  </div>
+                  <Field label="유통기한" error={fieldError} hint="모르면 비워 두세요.">
+                    <Input type="date" value={expirationDate} onChange={(event) => setExpirationDate(event.target.value)} />
+                  </Field>
+                  <FormMessage>다른 항목을 바꾸려면 전체 입력으로 전환하세요.</FormMessage>
                 </div>
-                <Field label="유통기한" error={fieldError} hint="모르면 비워 두세요.">
-                  <Input type="date" value={expirationDate} onChange={(event) => setExpirationDate(event.target.value)} />
-                </Field>
-                <FormMessage>다른 항목을 바꾸려면 전체 입력으로 전환하세요.</FormMessage>
               </div>
-              <div className="flex shrink-0 flex-wrap justify-between gap-2 border-t border-slate-100 bg-white px-5 py-4 md:px-7">
-                <Button type="button" variant="quiet" onClick={() => setQuickMode(false)}>
+              <div className="flex shrink-0 flex-wrap justify-between gap-2 border-t border-slate-100 bg-surface px-5 py-4 md:px-7">
+                <Button type="button" variant="quiet" onClick={exitQuickMode}>
                   전체 입력
                 </Button>
                 <div className="flex gap-2">
@@ -238,6 +275,7 @@ export function IngredientCreateDialog({
               initial={draft}
               submitLabel="등록"
               embedded
+              beforeFields={templatesBlock}
               onCancel={onClose}
               onSubmit={onSubmit}
             />

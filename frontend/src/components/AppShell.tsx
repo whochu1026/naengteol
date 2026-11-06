@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { BarChart3, CalendarDays, CheckCheck, LayoutDashboard, LogOut, Package, Trash2, UserRound } from "lucide-react";
+import { BarChart3, CalendarDays, CheckCheck, LayoutDashboard, LogOut, Package, Trash2, UserRound, X } from "lucide-react";
 import { BrandLink } from "@/components/BrandLink";
 import { api } from "@/lib/api";
 import { showExpiryBrowserNotifications } from "@/lib/notifications";
@@ -56,22 +56,25 @@ function AccountMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
     <div className="relative" ref={menuRef}>
       <button
         type="button"
-        className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-3 text-sm hover:bg-slate-50"
+        className="flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-surface py-1 pl-1 pr-3 text-sm shadow-sm hover:bg-brand-light/50"
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-brand text-xs font-semibold text-white">{initial}</span>
-        <span className="hidden max-w-40 truncate text-slate-700 lg:inline">{label}</span>
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-xs font-semibold text-white">{initial}</span>
+        <span className="hidden max-w-40 truncate text-foreground lg:inline">{label}</span>
       </button>
       {open ? (
-        <div role="menu" className="absolute right-0 z-40 mt-2 w-48 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg">
-          <p className="truncate px-3 py-2 text-xs text-slate-500">{user.email}</p>
+        <div
+          role="menu"
+          className="absolute right-0 z-40 mt-2 w-52 rounded-[var(--radius-card)] border border-border bg-surface p-1.5 shadow-[var(--shadow-soft)]"
+        >
+          <p className="truncate px-3 py-2 text-xs text-muted">{user.email}</p>
           <Link
             href="/stats"
             role="menuitem"
             aria-current={pathname === "/stats" ? "page" : undefined}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+            className={`flex items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm ${
               pathname === "/stats" ? "bg-brand-light font-medium text-brand" : "text-foreground hover:bg-brand-light"
             }`}
             onClick={() => setOpen(false)}
@@ -83,7 +86,7 @@ function AccountMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
             href="/trash"
             role="menuitem"
             aria-current={pathname === "/trash" ? "page" : undefined}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+            className={`flex items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm ${
               pathname === "/trash" ? "bg-brand-light font-medium text-brand" : "text-foreground hover:bg-brand-light"
             }`}
             onClick={() => setOpen(false)}
@@ -95,7 +98,7 @@ function AccountMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
             href="/account"
             role="menuitem"
             aria-current={pathname === "/account" ? "page" : undefined}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+            className={`flex items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm ${
               pathname === "/account" ? "bg-brand-light font-medium text-brand" : "text-foreground hover:bg-brand-light"
             }`}
             onClick={() => setOpen(false)}
@@ -106,7 +109,7 @@ function AccountMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            className="flex w-full items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-left text-sm text-muted hover:bg-slate-50 hover:text-foreground"
             onClick={onLogout}
           >
             <LogOut className="size-4" />
@@ -124,6 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [alertText, setAlertText] = useState("");
+  const [dismissedAlertKey, setDismissedAlertKey] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -132,7 +136,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .then((next) => {
         if (active) setUser(next);
       })
-      .catch(() => {
+      .catch(async () => {
+        // 만료·무효 쿠키가 남으면 /login ↔ /dashboard 리다이렉트 루프가 난다.
+        try {
+          await api.logout();
+        } catch {
+          // 쿠키 정리 실패해도 로그인으로 보낸다.
+        }
         if (active) router.replace("/login");
       })
       .finally(() => {
@@ -197,12 +207,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionContext.Provider value={{ user, setUser }}>
-      <div className="min-h-screen pb-20 md:pb-0">
-        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+      <div className="min-h-screen pb-24 md:pb-0">
+        <header className="sticky top-0 z-30 border-b border-border/80 bg-surface/85 backdrop-blur-md">
           <div className="mx-auto max-w-6xl px-4 md:px-8">
-            <div className="relative flex h-16 items-center justify-between">
+            <div className="relative flex h-[3.75rem] items-center justify-between">
               <BrandLink href="/dashboard" />
-              <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex" aria-label="주요 메뉴">
+              <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-0.5 md:flex" aria-label="주요 메뉴">
                 {desktopNav.map((item) => (
                   <NavLink key={item.href} href={item.href} pathname={pathname}>
                     {item.icon}
@@ -214,37 +224,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        {alertText ? (
-          <div className="border-b border-amber-200 bg-amber-50">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm text-amber-900 md:px-8">
-              <p>
-                유통기한 알림 · {alertText}
-                <span className="text-amber-700/80">
-                  {" "}
-                  · 앱을 열 때 확인
+        {alertText && dismissedAlertKey !== alertText ? (
+          <div className="border-b border-amber-200/80 bg-amber-50/90">
+            <div className="mx-auto flex max-w-6xl items-start gap-2 px-4 py-2.5 text-sm text-amber-950 md:items-center md:px-8">
+              <div className="min-w-0 flex-1 break-keep">
+                <p className="font-medium">유통기한 알림</p>
+                <p className="mt-0.5 text-amber-800/90">
+                  {alertText}
+                  <span className="whitespace-nowrap"> · 앱을 열 때 확인</span>
                   {!user.notificationSettings?.enabled ? (
                     <>
-                      {" "}
-                      ·{" "}
-                      <Link href="/account" className="underline underline-offset-2">
+                      {" · "}
+                      <Link href="/account" className="font-medium underline underline-offset-2">
                         알림 설정
                       </Link>
                     </>
                   ) : null}
-                </span>
-              </p>
-              <Link href="/plan" className="font-medium text-amber-950 underline underline-offset-2">
-                먹을 것 보기
-              </Link>
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <Link href="/plan" className="whitespace-nowrap font-semibold text-amber-950 underline underline-offset-2">
+                  먹을 것 보기
+                </Link>
+                <button
+                  type="button"
+                  className="grid size-8 place-items-center rounded-[var(--radius-control)] text-amber-900/70 hover:bg-amber-100 hover:text-amber-950"
+                  aria-label="알림 닫기"
+                  onClick={() => setDismissedAlertKey(alertText)}
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
         <main className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8 md:py-10">{children}</main>
         <nav
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-surface/95 backdrop-blur-md md:hidden"
           aria-label="모바일 메뉴"
         >
-          <div className="mx-auto grid max-w-6xl grid-cols-5 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+          <div className="mx-auto grid max-w-6xl grid-cols-5 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5">
             {mobileNav.map((item) => {
               const active = isCurrent(pathname, item.href);
               return (
@@ -252,8 +271,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`grid place-items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium ${
-                    active ? "text-brand" : "text-slate-500"
+                  className={`grid place-items-center gap-1 rounded-[var(--radius-control)] px-1 py-2 text-[11px] font-medium ${
+                    active ? "bg-brand-light text-brand" : "text-muted"
                   }`}
                 >
                   {item.icon}

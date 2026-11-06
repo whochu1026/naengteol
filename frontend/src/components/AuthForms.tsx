@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BrandLink } from "@/components/BrandLink";
-import { Button, Field, Input, brandTextLinkClass, cardClass } from "@/components/ui";
+import { Button, Field, Input, PasswordInput, brandTextLinkClass, cardClass } from "@/components/ui";
 import { api, fieldMessage } from "@/lib/api";
 import { PASSWORD_HINT } from "@/lib/format";
 
 type FieldErrorItem = { field: string; message: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REMEMBERED_EMAIL_KEY = "naengteol_remembered_email";
 
 function emailError(value: string) {
   const email = value.trim();
@@ -43,18 +44,39 @@ function validateAuth(input: {
   return errors;
 }
 
+function readRememberedEmail() {
+  try {
+    return localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeRememberedEmail(email: string | null) {
+  try {
+    if (email) localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+    else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+  } catch {
+    // storage 접근 실패는 로그인 흐름을 막지 않는다.
+  }
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberEmail, setRememberEmail] = useState(false);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<FieldErrorItem[]>([]);
   const [pending, setPending] = useState<"login" | "demo" | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    api.me().then(() => router.replace("/dashboard")).catch(() => undefined);
-  }, [router]);
+    const saved = readRememberedEmail();
+    if (!saved) return;
+    setEmail(saved);
+    setRememberEmail(true);
+  }, []);
 
   function applyLogin(nextEmail: string, nextPassword: string) {
     if (!submitted) return;
@@ -73,6 +95,7 @@ export function LoginForm() {
     setPending("login");
     try {
       await api.login(email, password);
+      writeRememberedEmail(rememberEmail ? email.trim().toLowerCase() : null);
       router.replace("/dashboard");
     } catch (error) {
       const known = error as { message?: string; errors?: FieldErrorItem[] };
@@ -111,8 +134,8 @@ export function LoginForm() {
         </>
       }
     >
-      <form noValidate onSubmit={onSubmit} className="grid gap-4">
-        {message ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p> : null}
+      <form noValidate onSubmit={onSubmit} className="grid gap-3.5">
+        {message ? <p className="rounded-[var(--radius-control)] bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p> : null}
         <Field label="이메일" error={fieldMessage(errors, "email")}>
           <Input
             invalid={Boolean(fieldMessage(errors, "email"))}
@@ -126,9 +149,8 @@ export function LoginForm() {
           />
         </Field>
         <Field label="비밀번호" error={fieldMessage(errors, "password")}>
-          <Input
+          <PasswordInput
             invalid={Boolean(fieldMessage(errors, "password"))}
-            type="password"
             value={password}
             autoComplete="current-password"
             onChange={(event) => {
@@ -137,16 +159,24 @@ export function LoginForm() {
             }}
           />
         </Field>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={rememberEmail}
+            onChange={(event) => setRememberEmail(event.target.checked)}
+            className="size-4 accent-brand"
+          />
+          아이디 저장
+        </label>
         <Button type="submit" disabled={pending !== null} className="w-full">
           {pending === "login" ? "로그인 중..." : "로그인"}
         </Button>
-        <div className="rounded-2xl border border-brand/20 bg-brand-light px-4 py-4">
+        <div className="rounded-[var(--radius-control)] border border-brand/20 bg-brand-light px-4 py-3">
           <p className="text-sm font-semibold text-brand">데모 계정으로 둘러보기</p>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            가입 없이 식재료 등록·유통기한 관리·소비 완료 흐름을 바로 확인할 수 있습니다.
+            가입 없이 식재료 등록·유통기한·소비 흐름을 바로 확인할 수 있습니다.
           </p>
-          <p className="mt-2 text-xs text-slate-500">계정: demo@naengteol.local</p>
-          <Button type="button" variant="brand" disabled={pending !== null} className="mt-3 w-full" onClick={onDemoLogin}>
+          <Button type="button" variant="brand" disabled={pending !== null} className="mt-2.5 w-full" onClick={onDemoLogin}>
             {pending === "demo" ? "데모 계정 로그인 중..." : "데모 계정으로 로그인"}
           </Button>
         </div>
@@ -205,8 +235,8 @@ export function SignupForm() {
         </>
       }
     >
-      <form noValidate onSubmit={onSubmit} className="grid gap-4">
-        {message ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p> : null}
+      <form noValidate onSubmit={onSubmit} className="grid gap-3.5">
+        {message ? <p className="rounded-[var(--radius-control)] bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p> : null}
         <Field label="이메일" error={fieldMessage(errors, "email")}>
           <Input
             invalid={Boolean(fieldMessage(errors, "email"))}
@@ -220,9 +250,8 @@ export function SignupForm() {
           />
         </Field>
         <Field label="비밀번호" error={fieldMessage(errors, "password")} hint={PASSWORD_HINT}>
-          <Input
+          <PasswordInput
             invalid={Boolean(fieldMessage(errors, "password"))}
-            type="password"
             value={password}
             autoComplete="new-password"
             onChange={(event) => {
@@ -232,9 +261,8 @@ export function SignupForm() {
           />
         </Field>
         <Field label="비밀번호 확인" error={fieldMessage(errors, "passwordConfirm")}>
-          <Input
+          <PasswordInput
             invalid={Boolean(fieldMessage(errors, "passwordConfirm"))}
-            type="password"
             value={confirm}
             autoComplete="new-password"
             onChange={(event) => {
@@ -263,29 +291,29 @@ function AuthCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-slate-200/80 bg-white/90">
-        <div className="mx-auto flex h-16 max-w-5xl items-center px-4 md:px-8">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-border/80 bg-surface/85 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-5xl items-center px-4 md:px-8">
           <BrandLink href="/login" />
         </div>
       </header>
-      <div className="mx-auto grid max-w-5xl items-center gap-10 px-4 py-12 md:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
-        <div>
-          <p className="text-sm font-medium text-brand">냉장고 재고</p>
-          <h1 className="mt-3 max-w-md text-4xl font-bold leading-tight text-foreground">
+      <div className="mx-auto grid min-h-0 w-full max-w-5xl flex-1 items-center gap-6 overflow-hidden px-4 py-6 md:gap-10 md:px-8 md:py-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="hidden min-w-0 lg:block">
+          <p className="text-sm font-semibold tracking-wide text-brand">냉털 · 냉장고 재고</p>
+          <h1 className="mt-3 max-w-md text-3xl font-bold leading-[1.2] tracking-tight text-foreground xl:text-4xl">
             냉장고 속 재료를 한눈에,
             <br />
             버리는 음식은 줄이게.
           </h1>
-          <p className="mt-4 max-w-md text-sm font-normal leading-6 text-slate-500">
+          <p className="mt-3 max-w-md text-sm font-normal leading-6 text-muted">
             보유 중인 식재료와 유통기한을 기록하고, 임박한 재료부터 먼저 확인하세요.
           </p>
         </div>
-        <section className={`${cardClass} w-full p-6 md:p-8`}>
-          <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-          <p className="mt-1.5 text-sm font-normal text-slate-500">{description}</p>
-          <div className="mt-7">{children}</div>
-          <p className="mt-6 text-sm text-slate-500">{footer}</p>
+        <section className={`${cardClass} w-full max-h-full overflow-y-auto p-5 md:p-6`}>
+          <h2 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">{title}</h2>
+          <p className="mt-1 text-sm font-normal text-muted">{description}</p>
+          <div className="mt-5">{children}</div>
+          <p className="mt-5 text-sm text-muted">{footer}</p>
         </section>
       </div>
     </div>

@@ -122,15 +122,27 @@ export const api = {
   quickTemplates: () => request<import("./types").QuickTemplate[]>("/api/ingredients/quick-templates"),
   expiryAlerts: () => request<import("./types").ExpiryAlerts>("/api/ingredients/alerts"),
   exportIngredients: () => request<{ csv: string; count: number }>("/api/ingredients/export"),
-  importIngredients: (csv: string) =>
+  importIngredients: (csv: string, options?: { dryRun?: boolean }) =>
     request<{
+      dryRun: boolean;
       createdCount: number;
+      validCount: number;
       errorCount: number;
       errors: { line: number; message: string }[];
+      preview: {
+        line: number;
+        ok: boolean;
+        name: string;
+        category: string;
+        quantity: string;
+        unit: string;
+        storageType: string;
+        message?: string;
+      }[];
       items: import("./types").Ingredient[];
     }>("/api/ingredients/import", {
       method: "POST",
-      body: JSON.stringify({ csv }),
+      body: JSON.stringify({ csv, dryRun: options?.dryRun }),
     }),
 };
 

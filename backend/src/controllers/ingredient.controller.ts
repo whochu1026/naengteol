@@ -100,7 +100,7 @@ export const ingredientController = {
 
   async importCsv(req: Request, res: Response) {
     const body = parseInput(importSchema, req.body);
-    const data = await ingredientService.importCsv(req.user!.id, body.csv);
+    const data = await ingredientService.importCsv(req.user!.id, body.csv, { dryRun: body.dryRun });
     res.status(201).json({ success: true, data });
   },
 };

@@ -13,7 +13,7 @@ import type {
   StorageType,
 } from "../types";
 import { AppError } from "../utils/errors";
-import { daysLeftOf, freshnessOf, seoulToday } from "../utils/expiration";
+import { daysLeftOf, diffDays, freshnessOf, seoulToday } from "../utils/expiration";
 
 export interface IngredientInput {
   name: string;
@@ -43,6 +43,8 @@ export interface ListQuery {
   storageType?: StorageType;
   status?: IngredientStatus | "ALL";
   freshness?: Freshness;
+  outcome?: ConsumeOutcome;
+  consumedWithin?: number;
   dueWithin?: number;
   sort?: SortKey;
   page?: number;
@@ -100,6 +102,11 @@ function sortIngredients(rows: Ingredient[], sort: SortKey): Ingredient[] {
   copy.sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name, "ko");
     if (sort === "createdAt") return b.createdAt.localeCompare(a.createdAt);
+    if (sort === "consumedAt") {
+      const left = a.consumedAt ?? a.updatedAt;
+      const right = b.consumedAt ?? b.updatedAt;
+      return right.localeCompare(left);
+    }
     if (!a.expirationDate && !b.expirationDate) return 0;
     if (!a.expirationDate) return 1;
     if (!b.expirationDate) return -1;
@@ -190,13 +197,33 @@ export const ingredientService = {
       else counts.unknown += 1;
     }
 
+    if (query.consumedWithin !== undefined) {
+      rows = rows.filter((row) => {
+        const stamp = (row.consumedAt ?? row.updatedAt ?? "").slice(0, 10);
+        if (!stamp) return false;
+        return diffDays(stamp, today) <= query.consumedWithin!;
+      });
+    }
+
+    const outcomeCounts = { total: rows.length, used: 0, wasted: 0 };
+    for (const row of rows) {
+      if ((row.outcome ?? "USED") === "WASTED") outcomeCounts.wasted += 1;
+      else outcomeCounts.used += 1;
+    }
+
     if (query.freshness) {
       rows = rows.filter((row) => freshnessOf(row.expirationDate, today) === query.freshness);
+    }
+    if (query.outcome) {
+      rows = rows.filter((row) => (row.outcome ?? "USED") === query.outcome);
     }
     if (query.dueWithin !== undefined) {
       rows = rows.filter((row) => {
         const days = daysLeftOf(row.expirationDate, today);
-        return days !== null && days <= query.dueWithin!;
+        if (days === null) return false;
+        // 0 = 오늘까지(당일만). 1 이상은 이미 지난 항목도 포함.
+        if (query.dueWithin === 0) return days === 0;
+        return days <= query.dueWithin!;
       });
     }
 
@@ -208,6 +235,7 @@ export const ingredientService = {
     return {
       items,
       counts,
+      outcomeCounts,
       pagination: {
         page,
         limit,
@@ -549,7 +577,7 @@ export const ingredientService = {
     return { csv: `${lines.join("\n")}\n`, count: rows.length };
   },
 
-  async importCsv(userId: string, csv: string) {
+  async importCsv(userId: string, csv: string, options: { dryRun?: boolean } = {}) {
     const categories = await categoryRepository.list();
     const byName = new Map(categories.map((category) => [category.name, category]));
     const rows = parseCsv(csv);
@@ -571,33 +599,88 @@ export const ingredientService = {
       throw new AppError(400, "CSV 헤더에 name, category, quantity, unit, storageType이 필요합니다.");
     }
     const created = [];
+    const preview: {
+      line: number;
+      ok: boolean;
+      name: string;
+      category: string;
+      quantity: string;
+      unit: string;
+      storageType: string;
+      message?: string;
+    }[] = [];
     const errors: { line: number; message: string }[] = [];
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i];
+      const line = i + 1;
+      const name = row[index.name]?.trim() || "";
+      const categoryName = row[index.category]?.trim() || "";
+      const quantityRaw = row[index.quantity]?.trim() || "";
+      const unit = row[index.unit]?.trim() || "";
+      const storageRaw = row[index.storageType]?.trim().toUpperCase() || "";
       try {
-        const categoryName = row[index.category]?.trim();
+        if (!name) throw new Error("식재료명을 입력해 주세요.");
+        if (!unit) throw new Error("단위를 입력해 주세요.");
+        const quantity = Number(quantityRaw);
+        if (!quantityRaw || Number.isNaN(quantity) || quantity <= 0) {
+          throw new Error("수량은 0보다 커야 합니다.");
+        }
         const category = byName.get(categoryName);
         if (!category) throw new Error(`카테고리 '${categoryName}'를 찾을 수 없습니다.`);
-        const storageType = row[index.storageType]?.trim().toUpperCase() as StorageType;
+        const storageType = storageRaw as StorageType;
         if (!["REFRIGERATED", "FROZEN", "ROOM"].includes(storageType)) {
           throw new Error("보관 장소가 올바르지 않습니다.");
         }
-        const item = await this.create(userId, {
-          name: row[index.name]?.trim() || "",
+        const purchasedAt = index.purchasedAt >= 0 ? row[index.purchasedAt]?.trim() || null : null;
+        const expirationDate = index.expirationDate >= 0 ? row[index.expirationDate]?.trim() || null : null;
+        assertDateOrder(purchasedAt, expirationDate);
+        const input = {
+          name,
           categoryId: category.id,
-          quantity: Number(row[index.quantity]),
-          unit: row[index.unit]?.trim() || "",
+          quantity,
+          unit,
           storageType,
-          purchasedAt: index.purchasedAt >= 0 ? row[index.purchasedAt]?.trim() || null : null,
-          expirationDate: index.expirationDate >= 0 ? row[index.expirationDate]?.trim() || null : null,
+          purchasedAt,
+          expirationDate,
           memo: index.memo >= 0 ? row[index.memo]?.trim() || null : null,
+        };
+        preview.push({
+          line,
+          ok: true,
+          name,
+          category: categoryName,
+          quantity: quantityRaw,
+          unit,
+          storageType: storageRaw,
         });
-        created.push(item);
+        if (!options.dryRun) {
+          const item = await this.create(userId, input);
+          created.push(item);
+        }
       } catch (error) {
-        errors.push({ line: i + 1, message: (error as Error).message });
+        const message = (error as Error).message;
+        errors.push({ line, message });
+        preview.push({
+          line,
+          ok: false,
+          name,
+          category: categoryName,
+          quantity: quantityRaw,
+          unit,
+          storageType: storageRaw,
+          message,
+        });
       }
     }
-    return { createdCount: created.length, errorCount: errors.length, errors, items: created.slice(0, 20) };
+    return {
+      dryRun: Boolean(options.dryRun),
+      createdCount: created.length,
+      validCount: preview.filter((row) => row.ok).length,
+      errorCount: errors.length,
+      errors,
+      preview: preview.slice(0, 100),
+      items: created.slice(0, 20),
+    };
   },
 
   async summary(userId: string) {
@@ -620,10 +703,7 @@ export const ingredientService = {
       .map((row) => toDto(row, names.get(row.categoryId) ?? "기타", today));
 
     const dueToday = sortIngredients(
-      active.filter((row) => {
-        const days = daysLeftOf(row.expirationDate, today);
-        return days !== null && days <= 0;
-      }),
+      active.filter((row) => daysLeftOf(row.expirationDate, today) === 0),
       "expirationDate",
     )
       .slice(0, 5)

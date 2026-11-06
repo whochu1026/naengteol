@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IngredientActionDialog, IngredientFacts } from "@/components/ingredient";
 import { ArrowLeft, Check, Pencil, RotateCcw, Trash2 } from "lucide-react";
-import { Button, ErrorBanner, FormMessage, LoadingBlock, StatusBadge, brandTextLinkClass } from "@/components/ui";
+import { Button, ErrorBanner, LoadingBlock, StatusBadge, Toast, brandTextLinkClass, useToastNotice } from "@/components/ui";
 import { api } from "@/lib/api";
 import { quantityLabel } from "@/lib/format";
 import type { Ingredient } from "@/lib/types";
@@ -14,7 +14,7 @@ export function IngredientDetailView({ id }: { id: string }) {
   const router = useRouter();
   const [item, setItem] = useState<Ingredient | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useToastNotice();
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [confirm, setConfirm] = useState<"delete" | "consume" | "restore" | null>(null);
@@ -103,7 +103,7 @@ export function IngredientDetailView({ id }: { id: string }) {
           ) : null}
         </div>
       </div>
-      {notice ? <FormMessage>{notice}</FormMessage> : null}
+      <Toast message={notice} />
       {error ? <ErrorBanner message={error} /> : null}
       <IngredientFacts item={item} layout="page" />
       {confirm ? (

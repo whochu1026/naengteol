@@ -2,8 +2,9 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Check } from "lucide-react";
 import { IngredientActionButton, IngredientActionDialog, IngredientDetailDialog } from "@/components/ingredient";
-import { Button, Card, EmptyState, ErrorBanner, FormMessage, LoadingBlock, PageHeader, StatusBadge } from "@/components/ui";
+import { Button, Card, EmptyState, ErrorBanner, LoadingBlock, PageHeader, SelectionBar, StatusBadge, Toast, useToastNotice } from "@/components/ui";
 import { api } from "@/lib/api";
 import { daysLabel, formatDate, quantityLabel } from "@/lib/format";
 import type { Category, ConsumeOutcome, Ingredient } from "@/lib/types";
@@ -23,7 +24,7 @@ export function PlanView() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useToastNotice();
   const [preview, setPreview] = useState<Ingredient | null>(null);
   const [confirm, setConfirm] = useState<null | {
     id: string;
@@ -124,7 +125,12 @@ export function PlanView() {
     <div className="grid gap-6">
       <PageHeader
         title="오늘·이번 주 먹을 것"
-        description="유통기한이 다가온 재료를 먹거나, 이미 못 쓰겠다면 폐기로 남겨 두세요."
+        description={
+          <>
+            유통기한이 다가온 재료를 먹거나,
+            <br className="sm:hidden" /> 이미 못 쓰겠다면 폐기로 남겨두세요.
+          </>
+        }
       />
       <div className="flex gap-2">
         <Button type="button" variant="chip" selected={range === "today"} onClick={() => setRange("today")}>
@@ -134,7 +140,7 @@ export function PlanView() {
           이번 주
         </Button>
       </div>
-      {notice ? <FormMessage>{notice}</FormMessage> : null}
+      <Toast message={notice} />
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
       {loading ? <LoadingBlock /> : null}
       {!loading && items.length === 0 ? (
@@ -156,18 +162,15 @@ export function PlanView() {
       {!loading && items.length > 0 ? (
         <>
           {selectedIds.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-brand/20 bg-brand-light px-4 py-3">
-              <span className="text-sm font-medium text-brand">{selectedIds.length}개 선택</span>
-              <Button type="button" variant="secondary" disabled={bulkPending} onClick={() => runBulk("consume")}>
+            <SelectionBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
+              <Button type="button" variant="brand" size="sm" disabled={bulkPending} onClick={() => runBulk("consume")}>
+                <Check />
                 일괄 소비
               </Button>
-              <Button type="button" variant="outlineDanger" disabled={bulkPending} onClick={() => runBulk("waste")}>
+              <Button type="button" variant="outlineDanger" size="sm" disabled={bulkPending} onClick={() => runBulk("waste")}>
                 일괄 폐기
               </Button>
-              <Button type="button" variant="quiet" onClick={() => setSelectedIds([])}>
-                선택 해제
-              </Button>
-            </div>
+            </SelectionBar>
           ) : null}
           <Card className="overflow-hidden p-0">
             <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-2.5 md:px-5">
@@ -182,38 +185,43 @@ export function PlanView() {
             </div>
             <ul className="divide-y divide-slate-100">
               {items.map((item) => (
-                <li key={item.id} className="flex items-center gap-3 px-4 py-3 md:px-5">
+                <li key={item.id} className="flex items-start gap-3 px-4 py-3 md:items-center md:px-5">
                   <input
                     type="checkbox"
-                    className="size-4 shrink-0 accent-brand"
+                    className="mt-1 size-4 shrink-0 accent-brand md:mt-0"
                     checked={selectedIds.includes(item.id)}
                     onChange={() => toggle(item.id)}
                     aria-label={`${item.name} 선택`}
                   />
-                  <button type="button" className="min-w-0 flex-1 rounded-lg px-1 py-1 text-left hover:bg-slate-50" onClick={() => setPreview(item)}>
-                    <span className="block font-medium text-slate-800">{item.name}</span>
-                    <span className="mt-0.5 block text-sm text-muted">
-                      {item.categoryName} · {quantityLabel(item.quantity, item.unit)} · {formatDate(item.expirationDate)} · {daysLabel(item.daysLeft)}
-                    </span>
-                  </button>
-                  <StatusBadge freshness={item.freshness} />
-                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    <IngredientActionButton
-                      label="소비"
-                      onClick={() =>
-                        setConfirm({ id: item.id, action: "consume", maxQuantity: item.quantity, unit: item.unit, initialOutcome: "USED" })
-                      }
-                    />
-                    <Button
-                      type="button"
-                      variant="outlineDanger"
-                      className="h-8 px-3 text-sm"
-                      onClick={() =>
-                        setConfirm({ id: item.id, action: "consume", maxQuantity: item.quantity, unit: item.unit, initialOutcome: "WASTED" })
-                      }
-                    >
-                      폐기
-                    </Button>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center md:gap-3">
+                    <button type="button" className="min-w-0 flex-1 rounded-lg px-1 py-1 text-left hover:bg-slate-50" onClick={() => setPreview(item)}>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium break-keep text-slate-800">{item.name}</span>
+                        <StatusBadge freshness={item.freshness} />
+                      </span>
+                      <span className="mt-0.5 block text-sm break-keep text-muted">
+                        {item.categoryName} · {quantityLabel(item.quantity, item.unit)} · {formatDate(item.expirationDate)} ·{" "}
+                        {daysLabel(item.daysLeft)}
+                      </span>
+                    </button>
+                    <div className="flex flex-wrap justify-end gap-2 md:shrink-0">
+                      <IngredientActionButton
+                        label="소비"
+                        onClick={() =>
+                          setConfirm({ id: item.id, action: "consume", maxQuantity: item.quantity, unit: item.unit, initialOutcome: "USED" })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="outlineDanger"
+                        size="sm"
+                        onClick={() =>
+                          setConfirm({ id: item.id, action: "consume", maxQuantity: item.quantity, unit: item.unit, initialOutcome: "WASTED" })
+                        }
+                      >
+                        폐기
+                      </Button>
+                    </div>
                   </div>
                 </li>
               ))}

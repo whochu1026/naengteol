@@ -1,12 +1,79 @@
 import { STORAGE_LABEL } from "@/lib/format";
-import type { FreshnessCounts, SortKey, StorageType } from "@/lib/types";
+import type { FreshnessCounts, OutcomeCounts, SortKey, StorageType } from "@/lib/types";
 import { Button, Select } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
-const SORT_CHIPS: { value: SortKey; label: string }[] = [
+function CountTabs({
+  label,
+  tabs,
+  value,
+  onChange,
+}: {
+  label: string;
+  tabs: { value: string; label: string; count?: number }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2" role="tablist" aria-label={label}>
+      {tabs.map((tab) => {
+        const selected = value === tab.value;
+        return (
+          <button
+            key={tab.label}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(tab.value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-200",
+              selected
+                ? "border-brand bg-brand-light text-brand shadow-sm"
+                : "border-border bg-surface text-muted hover:border-brand/40 hover:bg-brand-light/50 hover:text-foreground",
+            )}
+          >
+            {tab.label}
+            {typeof tab.count === "number" ? (
+              <span
+                className={cn(
+                  "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+                  selected ? "bg-brand/15 text-brand" : "bg-slate-100 text-slate-500",
+                )}
+              >
+                {tab.count}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const ACTIVE_SORT_CHIPS: { value: SortKey; label: string }[] = [
   { value: "expirationDate", label: "임박순" },
   { value: "expirationDateDesc", label: "늦은 순" },
   { value: "name", label: "이름순" },
   { value: "createdAt", label: "최근 등록" },
+];
+
+const CONSUMED_SORT_CHIPS: { value: SortKey; label: string }[] = [
+  { value: "consumedAt", label: "최근 소비" },
+  { value: "name", label: "이름순" },
+  { value: "createdAt", label: "최근 등록" },
+];
+
+const OUTCOME_TABS = [
+  { value: "", label: "전체", countKey: "total" as const },
+  { value: "USED", label: "먹음", countKey: "used" as const },
+  { value: "WASTED", label: "폐기", countKey: "wasted" as const },
+];
+
+const PERIOD_CHIPS = [
+  { value: "", label: "전체" },
+  { value: "0", label: "오늘" },
+  { value: "7", label: "7일" },
+  { value: "30", label: "30일" },
 ];
 
 const FRESHNESS_TABS = [
@@ -27,20 +94,16 @@ export function FreshnessTabs({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="-mx-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="유통기한">
-      <div className="flex min-w-max gap-1 px-1">
-        {FRESHNESS_TABS.map((tab) => {
-          const selected = value === tab.value;
-          const count = counts?.[tab.countKey];
-          return (
-            <Button key={tab.label} variant="tab" selected={selected} role="tab" aria-selected={selected} onClick={() => onChange(tab.value)}>
-              {tab.label}
-              {typeof count === "number" ? <span className="tabular-nums text-current/60">{count}</span> : null}
-            </Button>
-          );
-        })}
-      </div>
-    </div>
+    <CountTabs
+      label="유통기한"
+      value={value}
+      onChange={onChange}
+      tabs={FRESHNESS_TABS.map((tab) => ({
+        value: tab.value,
+        label: tab.label,
+        count: counts?.[tab.countKey],
+      }))}
+    />
   );
 }
 
@@ -85,8 +148,8 @@ function OptionChips({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2" role="radiogroup" aria-label={label}>
-      <span className="text-xs font-medium text-slate-500">{label}</span>
+    <div className="min-w-0" role="radiogroup" aria-label={label}>
+      <p className="mb-1.5 text-xs font-medium text-slate-500">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((option) => {
           const selected = value === option.value;
@@ -109,8 +172,44 @@ function OptionChips({
   );
 }
 
-export function SortRadios({ value, onChange }: { value: SortKey; onChange: (value: SortKey) => void }) {
-  return <OptionChips label="정렬" value={value} options={SORT_CHIPS} onChange={(next) => onChange(next as SortKey)} />;
+export function SortRadios({
+  value,
+  onChange,
+  mode = "active",
+}: {
+  value: SortKey;
+  onChange: (value: SortKey) => void;
+  mode?: "active" | "consumed";
+}) {
+  const chips = mode === "consumed" ? CONSUMED_SORT_CHIPS : ACTIVE_SORT_CHIPS;
+  return <OptionChips label="정렬" value={value} options={chips} onChange={(next) => onChange(next as SortKey)} />;
+}
+
+export function OutcomeTabs({
+  value,
+  counts,
+  onChange,
+}: {
+  value: string;
+  counts?: OutcomeCounts | null;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <CountTabs
+      label="소비 결과"
+      value={value}
+      onChange={onChange}
+      tabs={OUTCOME_TABS.map((tab) => ({
+        value: tab.value,
+        label: tab.label,
+        count: counts?.[tab.countKey],
+      }))}
+    />
+  );
+}
+
+export function ConsumedPeriodChips({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <OptionChips label="기간" value={value} options={PERIOD_CHIPS} onChange={onChange} />;
 }
 
 export function StorageChips({ value, onChange }: { value: string; onChange: (value: string) => void }) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronRight, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { IngredientForm } from "@/components/IngredientForm";
 import { Button, ConfirmDialog, Field, Input, Modal, StatusBadge, cardClass } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -74,31 +74,26 @@ export function IngredientFacts({ item, layout }: { item: Ingredient; layout: "p
   );
 }
 
-export function IngredientNameButton({ name, onClick }: { name: string; onClick: () => void }) {
-  return (
-    <Button
-      type="button"
-      variant="link"
-      className="max-w-full underline decoration-brand underline-offset-2 hover:bg-brand-light/60"
-      aria-haspopup="dialog"
-      aria-label={`${name} 상세 보기`}
-      title="상세 보기"
-      onClick={onClick}
-    >
-      <span className="truncate">{name}</span>
-      <ChevronRight className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
-    </Button>
-  );
+export function IngredientNameButton({ name }: { name: string; onClick?: () => void }) {
+  return <span className="block max-w-full truncate font-medium text-slate-800">{name}</span>;
 }
 
 export function IngredientStatus({ item }: { item: Ingredient }) {
-  const outcomeLabel = item.status === "CONSUMED" ? (item.outcome === "WASTED" ? "폐기" : "먹음") : null;
-  return (
-    <span className="inline-flex flex-col items-start gap-1">
-      <StatusBadge freshness={item.freshness} />
-      {outcomeLabel ? <span className="text-xs text-slate-400">{outcomeLabel}</span> : null}
-    </span>
-  );
+  if (item.status === "CONSUMED") {
+    const wasted = item.outcome === "WASTED";
+    return (
+      <span
+        className={
+          wasted
+            ? "inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200/80"
+            : "inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200/80"
+        }
+      >
+        {wasted ? OUTCOME_LABEL.WASTED : OUTCOME_LABEL.USED}
+      </span>
+    );
+  }
+  return <StatusBadge freshness={item.freshness} />;
 }
 
 export function IngredientActionButton({
@@ -166,8 +161,13 @@ export function IngredientActionDialog({
   }
 
   return (
-    <Modal titleId="consume-title" onClose={onClose} panelClassName="w-full max-w-md cursor-default rounded-3xl bg-white p-6 shadow-xl">
-      <h2 id="consume-title" className="text-lg font-semibold text-slate-800">
+    <Modal
+      titleId="consume-title"
+      onClose={onClose}
+      closeDisabled={pending}
+      panelClassName="w-full max-w-md cursor-default rounded-[var(--radius-card)] border border-border bg-surface p-6 shadow-[var(--shadow-soft)]"
+    >
+      <h2 id="consume-title" className="pr-10 text-lg font-semibold text-slate-800">
         {outcome === "WASTED" ? "폐기" : "소비 완료"}
       </h2>
       <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -276,10 +276,10 @@ export function IngredientDetailDialog({
     <Modal
       titleId="ingredient-detail-title"
       onClose={handleClose}
-      panelClassName="flex max-h-[90vh] w-full max-w-lg cursor-default flex-col overflow-hidden rounded-3xl bg-white shadow-xl"
+      panelClassName="flex max-h-[90vh] w-full max-w-lg cursor-default flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-soft)]"
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
-        <div className="min-w-0 pr-2">
+      <header className="shrink-0 border-b border-slate-100 px-5 py-4 pr-14">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 id="ingredient-detail-title" className="text-lg font-semibold text-slate-800">
               {mode === "edit" ? "식재료 수정" : current.name}
@@ -290,9 +290,6 @@ export function IngredientDetailDialog({
             <p className="mt-1 text-sm text-slate-500">변경한 내용을 저장하면 목록에도 바로 반영됩니다.</p>
           ) : null}
         </div>
-        <Button type="button" variant="quiet" size="icon" aria-label={mode === "edit" ? "수정 취소" : "닫기"} onClick={handleClose}>
-          <X />
-        </Button>
       </header>
 
       {mode === "view" ? (
@@ -381,20 +378,35 @@ export function IngredientListItems({
     mode === "consumed"
       ? ["", "No.", "식재료명", "카테고리", "수량", "보관 장소", "소비일", "상태", "관리"]
       : ["", "No.", "식재료명", "카테고리", "수량", "보관 장소", "유통기한", "상태", "관리"];
+  const centerHeaders = new Set(["", "No.", "카테고리", "수량", "보관 장소", "유통기한", "소비일", "상태", "관리"]);
   return (
     <>
       <div className={`${cardClass} hidden overflow-hidden md:block`}>
-        <table className="w-full text-left text-sm">
+        <table className="w-full table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[6%]" />
+            <col className="w-[6%]" />
+            <col />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[12%]" />
+            <col className="w-[10%]" />
+            <col className={mode === "consumed" ? "w-[14rem]" : "w-[10rem]"} />
+          </colgroup>
           <thead className="bg-slate-50/80 text-xs text-slate-500">
             <tr>
               {headers.map((label, index) => (
-                <th key={`${label}-${index}`} className={`px-4 py-3.5 font-medium ${label === "No." ? "w-14 text-center" : ""} ${label === "" ? "w-10" : ""}`}>
+                <th
+                  key={`${label}-${index}`}
+                  className={`px-3 py-3.5 align-middle font-medium ${centerHeaders.has(label) ? "text-center" : ""} ${label === "관리" ? "whitespace-nowrap" : ""}`}
+                >
                   {label === "" ? (
                     <input
                       type="checkbox"
                       checked={allSelected}
                       onChange={() => onToggleAll?.(allSelected ? [] : items.map((item) => item.id))}
-                      className="size-4 accent-brand"
+                      className="mx-auto block size-4 accent-brand"
                       aria-label="전체 선택"
                     />
                   ) : (
@@ -406,39 +418,49 @@ export function IngredientListItems({
           </thead>
           <tbody>
             {items.map((item, index) => (
-              <tr key={item.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3.5">
+              <tr
+                key={item.id}
+                className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
+                onClick={() => onOpen(item)}
+              >
+                <td
+                  className="px-3 py-3.5 align-middle text-center"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     checked={selectedIds.includes(item.id)}
                     onChange={() => onToggle?.(item.id)}
-                    className="size-4 accent-brand"
+                    className="mx-auto block size-4 accent-brand"
                     aria-label={`${item.name} 선택`}
                   />
                 </td>
-                <td className="px-4 py-3.5 text-center font-normal tabular-nums text-slate-500">{startNo + index + 1}</td>
-                <td className="px-4 py-3.5 font-medium text-slate-800">
-                  <IngredientNameButton name={item.name} onClick={() => onOpen(item)} />
+                <td className="px-3 py-3.5 text-center font-normal tabular-nums text-slate-500">{startNo + index + 1}</td>
+                <td className="min-w-0 px-3 py-3.5 font-medium text-slate-800">
+                  <IngredientNameButton name={item.name} />
                 </td>
-                <td className="px-4 py-3 font-normal text-slate-600">{item.categoryName}</td>
-                <td className="px-4 py-3 font-normal tabular-nums text-slate-600">{quantityLabel(item.quantity, item.unit)}</td>
-                <td className="px-4 py-3 font-normal text-slate-600">{STORAGE_LABEL[item.storageType]}</td>
+                <td className="truncate px-3 py-3 text-center font-normal text-slate-600">{item.categoryName}</td>
+                <td className="px-3 py-3 text-center font-normal tabular-nums text-slate-600">{quantityLabel(item.quantity, item.unit)}</td>
+                <td className="px-3 py-3 text-center font-normal text-slate-600">{STORAGE_LABEL[item.storageType]}</td>
                 {mode === "consumed" ? (
-                  <td className="px-4 py-3 font-normal tabular-nums text-slate-600">{formatDate(item.consumedAt)}</td>
+                  <td className="px-3 py-3 text-center font-normal tabular-nums text-slate-600">{formatDate(item.consumedAt)}</td>
                 ) : (
-                  <td className="px-4 py-3 font-normal tabular-nums text-slate-600">
+                  <td className="px-3 py-3 text-center font-normal tabular-nums text-slate-600">
                     {formatDate(item.expirationDate)}
                     <span className="mt-0.5 block text-xs font-normal text-slate-400">{daysLabel(item.daysLeft)}</span>
                   </td>
                 )}
-                <td className="px-4 py-3">
+                <td className="px-3 py-3 text-center align-middle">
                   <IngredientStatus item={item} />
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
+                <td
+                  className="px-2 py-3 text-center align-middle whitespace-nowrap"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="inline-flex flex-nowrap items-center justify-center gap-1">
                     {mode === "consumed" && onReregister ? (
-                      <Button type="button" variant="secondary" onClick={() => onReregister(item)}>
-                        다시 등록
+                      <Button type="button" variant="secondary" size="sm" onClick={() => onReregister(item)}>
+                        재등록
                       </Button>
                     ) : null}
                     <IngredientActionButton label={actionLabel(mode)} pending={actingId === item.id} onClick={() => onAction(item)} />
@@ -461,23 +483,27 @@ export function IngredientListItems({
                 aria-label={`${item.name} 선택`}
               />
               <div className="min-w-0 flex-1">
-                <span className="flex items-start justify-between gap-3">
-                  <span className="min-w-0">
-                    <span className="mb-1 block text-xs tabular-nums text-slate-400">No. {startNo + index + 1}</span>
-                    <IngredientNameButton name={item.name} onClick={() => onOpen(item)} />
-                    <span className="block text-sm text-slate-500">
-                      {item.categoryName} · {quantityLabel(item.quantity, item.unit)} · {STORAGE_LABEL[item.storageType]}
-                    </span>
-                  </span>
-                  <IngredientStatus item={item} />
-                </span>
-                <span className="mt-3 block text-sm text-slate-500">
-                  {mode === "consumed" ? `소비일 ${formatDate(item.consumedAt)}` : `유통기한 ${formatDate(item.expirationDate)} · ${daysLabel(item.daysLeft)}`}
-                </span>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="w-full text-left" onClick={() => onOpen(item)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <span className="mb-1 block text-xs tabular-nums text-slate-400">No. {startNo + index + 1}</span>
+                      <IngredientNameButton name={item.name} />
+                      <p className="mt-1 text-sm break-keep text-slate-500">
+                        {item.categoryName} · {quantityLabel(item.quantity, item.unit)} · {STORAGE_LABEL[item.storageType]}
+                      </p>
+                    </div>
+                    <IngredientStatus item={item} />
+                  </div>
+                  <p className="mt-3 text-sm break-keep text-slate-500">
+                    {mode === "consumed"
+                      ? `소비일 ${formatDate(item.consumedAt)}`
+                      : `유통기한 ${formatDate(item.expirationDate)} · ${daysLabel(item.daysLeft)}`}
+                  </p>
+                </button>
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-1.5">
                   {mode === "consumed" && onReregister ? (
-                    <Button type="button" variant="secondary" onClick={() => onReregister(item)}>
-                      다시 등록
+                    <Button type="button" variant="secondary" size="sm" onClick={() => onReregister(item)}>
+                      재등록
                     </Button>
                   ) : null}
                   <IngredientActionButton label={actionLabel(mode)} pending={actingId === item.id} onClick={() => onAction(item)} />

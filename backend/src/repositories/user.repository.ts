@@ -2,6 +2,10 @@ import type { User } from "../types";
 import { userTable } from "./store";
 
 export const userRepository = {
+  async list(): Promise<User[]> {
+    return userTable.read();
+  },
+
   async findByEmail(email: string): Promise<User | undefined> {
     const users = await userTable.read();
     return users.find((user) => user.email === email);

@@ -16,6 +16,7 @@ export function IngredientForm({
   cancelHref,
   onCancel,
   embedded = false,
+  beforeFields,
   onSubmit,
 }: {
   categories: Category[];
@@ -24,6 +25,7 @@ export function IngredientForm({
   cancelHref?: string;
   onCancel?: () => void;
   embedded?: boolean;
+  beforeFields?: React.ReactNode;
   onSubmit: (values: IngredientInput) => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -40,22 +42,32 @@ export function IngredientForm({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
 
+  const parsedQuantity = Number(quantity);
+  const resolvedUnit = unit === "custom" ? customUnit.trim() : unit;
+  const canSubmit =
+    Boolean(name.trim()) &&
+    Boolean(categoryId) &&
+    Boolean(storageType) &&
+    Boolean(resolvedUnit) &&
+    quantity.trim() !== "" &&
+    !Number.isNaN(parsedQuantity) &&
+    parsedQuantity > 0 &&
+    !(purchasedAt && expirationDate && expirationDate < purchasedAt);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const nextErrors: FieldError[] = [];
-    const parsedQuantity = Number(quantity);
     if (!name.trim()) nextErrors.push({ field: "name", message: "식재료명을 입력해 주세요." });
     if (!categoryId) nextErrors.push({ field: "categoryId", message: "카테고리를 선택해 주세요." });
     if (!quantity || Number.isNaN(parsedQuantity) || parsedQuantity <= 0) {
       nextErrors.push({ field: "quantity", message: "수량은 0보다 커야 합니다." });
     }
-    const resolvedUnit = unit === "custom" ? customUnit.trim() : unit;
     if (!resolvedUnit) nextErrors.push({ field: "unit", message: "단위를 입력해 주세요." });
     if (purchasedAt && expirationDate && expirationDate < purchasedAt) {
       nextErrors.push({ field: "expirationDate", message: "유통기한은 구매일보다 빠를 수 없습니다." });
     }
     setErrors(nextErrors);
-    if (nextErrors.length > 0) return;
+    if (nextErrors.length > 0 || !canSubmit) return;
 
     setPending(true);
     setMessage("");
@@ -81,12 +93,12 @@ export function IngredientForm({
 
   const fields = (
     <>
-      {message ? <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p> : null}
+      {message ? <p className="mb-4 rounded-[var(--radius-control)] bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p> : null}
       <div className="grid gap-4">
         <Field label="식재료명" error={fieldMessage(errors, "name")} required>
           <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <Field label="카테고리" error={fieldMessage(errors, "categoryId")} required>
             <Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
               {categories.map((category) => (
@@ -105,11 +117,6 @@ export function IngredientForm({
               ))}
             </Select>
           </Field>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="수량" error={fieldMessage(errors, "quantity")} required>
-            <Input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-          </Field>
           <Field label="단위" error={fieldMessage(errors, "unit")} required>
             <Select value={UNITS.includes(unit) ? unit : "custom"} onChange={(event) => setUnit(event.target.value)}>
               {UNITS.map((item) => (
@@ -122,11 +129,14 @@ export function IngredientForm({
           </Field>
         </div>
         {unit === "custom" ? (
-          <Field label="단위 직접 입력" error={fieldMessage(errors, "unit")}>
+          <Field label="단위 직접 입력" error={fieldMessage(errors, "unit")} required>
             <Input value={customUnit} onChange={(event) => setCustomUnit(event.target.value)} maxLength={20} />
           </Field>
         ) : null}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="수량" error={fieldMessage(errors, "quantity")} required>
+            <Input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+          </Field>
           <Field label="구매일" error={fieldMessage(errors, "purchasedAt")}>
             <Input type="date" value={purchasedAt} onChange={(event) => setPurchasedAt(event.target.value)} />
           </Field>
@@ -152,7 +162,7 @@ export function IngredientForm({
           취소
         </Button>
       )}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending || !canSubmit}>
         {pending ? "저장 중..." : submitLabel}
       </Button>
     </>
@@ -160,9 +170,12 @@ export function IngredientForm({
 
   if (embedded) {
     return (
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-7">{fields}</div>
-        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-white px-5 py-4 md:px-7">{actions}</div>
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {beforeFields}
+          <div className="px-5 py-5 md:px-7">{fields}</div>
+        </div>
+        <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 bg-surface px-5 py-4 md:px-7">{actions}</div>
       </form>
     );
   }
