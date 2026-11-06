@@ -70,7 +70,7 @@ cp backend/.env.example backend/.env
 | macOS | Finder에서 `start.command` 더블클릭 |
 | Windows | 탐색기에서 `start.bat` 더블클릭 |
 
-의존성 설치(필요 시)·`.env` 생성·`npm run dev`까지 자동으로 진행됩니다.
+의존성 설치(필요 시)·`.env` 생성·`npm run dev`·브라우저(`http://localhost:3000`) 열기까지 자동으로 진행됩니다.
 
 또는 터미널에서:
 

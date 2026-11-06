@@ -60,9 +60,14 @@ echo     웹  http://localhost:3000
 echo     API http://localhost:4000
 echo     문서 http://localhost:4000/api/docs
 echo.
+echo 준비되면 브라우저가 자동으로 열립니다.
 echo 중지하려면 이 창에서 Ctrl+C
 echo ----------------------------------------
 echo.
+
+REM 웹이 응답하면 기본 브라우저로 열기 (백그라운드)
+start "" /b powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "for ($i=0; $i -lt 90; $i++) { try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/' -UseBasicParsing -TimeoutSec 1; if ($r.StatusCode -ge 200) { Start-Process 'http://localhost:3000'; exit 0 } } catch {} Start-Sleep -Seconds 1 }"
 
 call npm run dev
 echo.

@@ -49,9 +49,25 @@ echo "   웹  http://localhost:3000"
 echo "   API http://localhost:4000"
 echo "   문서 http://localhost:4000/api/docs"
 echo
+echo "준비되면 브라우저가 자동으로 열립니다."
 echo "중지하려면 이 창에서 Ctrl+C"
 echo "----------------------------------------"
 echo
+
+# 웹이 응답하면 기본 브라우저로 열기 (백그라운드)
+(
+  for _ in $(seq 1 90); do
+    if curl -sf -o /dev/null --connect-timeout 1 http://127.0.0.1:3000/ 2>/dev/null; then
+      if command -v open >/dev/null 2>&1; then
+        open "http://localhost:3000"
+      elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "http://localhost:3000"
+      fi
+      exit 0
+    fi
+    sleep 1
+  done
+) >/dev/null 2>&1 &
 
 npm run dev
 
