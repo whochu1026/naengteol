@@ -1,0 +1,15 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/categories'
+order: 4000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const categories = pm.response.json().data;
+      pm.test('기본 카테고리 8개', () => {
+        pm.response.to.have.status(200);
+        pm.expect(categories).to.have.lengthOf(8);
+      });
+      const dairy = categories.find((category) => category.name === '유제품');
+      pm.collectionVariables.set('categoryId', dairy.id);

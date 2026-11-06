@@ -1,0 +1,528 @@
+openapi: 3.0.3
+info:
+  title: 냉털 API
+  version: 1.1.0
+  description: |
+    냉장고 식재료 재고와 유통기한을 관리하는 REST API.
+    인증은 JWT를 HttpOnly 쿠키 `naengteol_token`으로 전달한다.
+    유통기한 상태(정상/임박/만료/기한 미정)는 Asia/Seoul 날짜 기준으로 계산한다.
+    삭제는 기본적으로 휴지통(soft delete)으로 이동하며, purge로 영구 삭제한다.
+servers:
+  - url: http://localhost:4000
+tags:
+  - name: Auth
+  - name: Categories
+  - name: Ingredients
+  - name: Dashboard
+paths:
+  /api/health:
+    get:
+      tags: [Dashboard]
+      summary: 서버 상태
+      responses:
+        "200":
+          description: 정상
+  /api/auth/signup:
+    post:
+      tags: [Auth]
+      summary: 회원가입
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "201":
+          description: 가입 후 로그인 쿠키 발급
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: 이미 가입된 이메일
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: 로그인
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: 로그인 쿠키 발급
+        "401":
+          description: 이메일 또는 비밀번호 불일치
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: 토큰 버전을 올리고 쿠키를 제거한다.
+      responses:
+        "200":
+          description: 로그아웃 완료
+  /api/auth/demo:
+    post:
+      tags: [Auth]
+      summary: 데모 로그인
+      description: |
+        `demo@naengteol.local` 계정으로 즉시 로그인한다.
+        서버 환경변수 `DEMO_LOGIN=false`이면 404를 반환한다.
+      responses:
+        "200":
+          description: 데모 로그인 쿠키 발급
+        "404":
+          description: 데모 로그인 비활성
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: 내 정보
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 로그인 사용자
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [Auth]
+      summary: 프로필 수정 (닉네임·알림 설정)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname: { type: string, minLength: 1, maxLength: 20 }
+                notificationSettings:
+                  type: object
+                  required: [enabled, notifyD3, notifyD0]
+                  properties:
+                    enabled: { type: boolean }
+                    notifyD3: { type: boolean }
+                    notifyD0: { type: boolean }
+      responses:
+        "200":
+          description: 수정된 사용자
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Auth]
+      summary: 회원 탈퇴
+      description: 계정과 식재료를 함께 삭제한다.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 탈퇴 완료
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/auth/password:
+    patch:
+      tags: [Auth]
+      summary: 비밀번호 변경
+      description: 현재 비밀번호를 확인한 뒤 새 비밀번호로 바꾸고, 로그인 쿠키를 다시 발급한다.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8, maxLength: 20 }
+      responses:
+        "200":
+          description: 변경 완료
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: 기본 카테고리 목록
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 카테고리 목록
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: 보유 식재료 통계와 임박·오늘·이번 주 목록
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 대시보드
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients:
+    get:
+      tags: [Ingredients]
+      summary: 내 식재료 목록
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: keyword
+          schema: { type: string }
+        - in: query
+          name: categoryId
+          schema: { type: string }
+        - in: query
+          name: storageType
+          schema: { $ref: "#/components/schemas/StorageType" }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, CONSUMED, DELETED, ALL]
+            default: ACTIVE
+        - in: query
+          name: freshness
+          schema: { $ref: "#/components/schemas/Freshness" }
+        - in: query
+          name: dueWithin
+          description: 유통기한까지 남은 일수가 N일 이하인 항목만
+          schema: { type: integer, minimum: 0, maximum: 30 }
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [expirationDate, expirationDateDesc, name, createdAt]
+            default: expirationDate
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+      responses:
+        "200":
+          description: 목록과 freshness counts
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Ingredients]
+      summary: 식재료 등록
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngredientInput"
+      responses:
+        "201":
+          description: 등록된 식재료
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/stats:
+    get:
+      tags: [Ingredients]
+      summary: 소비·폐기 통계
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 통계 (used/wasted/savedRate 포함)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/quick-templates:
+    get:
+      tags: [Ingredients]
+      summary: 빠른 재등록 템플릿
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 자주·최근 사용한 식재료 템플릿
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/alerts:
+    get:
+      tags: [Ingredients]
+      summary: D-3·당일 유통기한 알림 대상
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 알림 설정과 대상 목록
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/export:
+    get:
+      tags: [Ingredients]
+      summary: CSV 내보내기
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: csv 문자열
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/import:
+    post:
+      tags: [Ingredients]
+      summary: CSV 가져오기
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [csv]
+              properties:
+                csv: { type: string }
+      responses:
+        "201":
+          description: 가져오기 결과
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/merge-suggestions:
+    get:
+      tags: [Ingredients]
+      summary: 같은 이름 합치기 제안
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 합칠 수 있는 그룹 목록
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/merge:
+    post:
+      tags: [Ingredients]
+      summary: 식재료 합치기
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+                  minItems: 2
+      responses:
+        "200":
+          description: 합쳐진 식재료
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/bulk:
+    post:
+      tags: [Ingredients]
+      summary: 일괄 처리
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, ids]
+              properties:
+                action:
+                  type: string
+                  enum: [consume, waste, delete, restore, purge]
+                ids:
+                  type: array
+                  items: { type: string }
+                  minItems: 1
+      responses:
+        "200":
+          description: 일괄 처리 결과
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/ingredients/{id}:
+    get:
+      tags: [Ingredients]
+      summary: 식재료 상세
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IngredientId"
+      responses:
+        "200":
+          description: 상세
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Ingredients]
+      summary: 식재료 수정
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IngredientId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngredientPatch"
+      responses:
+        "200":
+          description: 수정된 식재료
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Ingredients]
+      summary: 식재료 휴지통 이동 (soft delete)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IngredientId"
+      responses:
+        "200":
+          description: 휴지통으로 이동
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/ingredients/{id}/consume:
+    post:
+      tags: [Ingredients]
+      summary: 소비 완료 또는 부분 소비
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IngredientId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: 지정하면 해당 수량만 차감, 없으면 전량 소비 (폐기 시에는 사용 불가)
+                outcome:
+                  type: string
+                  enum: [USED, WASTED]
+                  default: USED
+      responses:
+        "200":
+          description: 소비 처리 결과
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/ingredients/{id}/restore:
+    post:
+      tags: [Ingredients]
+      summary: 보유 상태로 복구
+      description: 소비 완료 또는 휴지통 항목을 보유로 되돌린다.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IngredientId"
+      responses:
+        "200":
+          description: 보유 상태로 변경
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/ingredients/{id}/purge:
+    post:
+      tags: [Ingredients]
+      summary: 휴지통 항목 영구 삭제
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IngredientId"
+      responses:
+        "200":
+          description: 영구 삭제 완료
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: naengteol_token
+  parameters:
+    IngredientId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: 입력값 오류
+    Unauthorized:
+      description: 로그인 필요
+    NotFound:
+      description: 식재료 없음 또는 다른 사용자의 식재료
+  schemas:
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 20 }
+    StorageType:
+      type: string
+      enum: [REFRIGERATED, FROZEN, ROOM]
+    Freshness:
+      type: string
+      enum: [FRESH, EXPIRING, EXPIRED, UNKNOWN]
+    IngredientInput:
+      type: object
+      required: [name, categoryId, quantity, unit, storageType]
+      properties:
+        name: { type: string, maxLength: 100 }
+        categoryId: { type: string }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unit: { type: string, maxLength: 20 }
+        purchasedAt: { type: string, format: date, nullable: true }
+        expirationDate: { type: string, format: date, nullable: true }
+        storageType: { $ref: "#/components/schemas/StorageType" }
+        memo: { type: string, maxLength: 500, nullable: true }
+    IngredientPatch:
+      type: object
+      properties:
+        name: { type: string }
+        categoryId: { type: string }
+        quantity: { type: number }
+        unit: { type: string }
+        purchasedAt: { type: string, format: date, nullable: true }
+        expirationDate: { type: string, format: date, nullable: true }
+        storageType: { $ref: "#/components/schemas/StorageType" }
+        memo: { type: string, nullable: true }

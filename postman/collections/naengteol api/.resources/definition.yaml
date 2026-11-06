@@ -1,0 +1,13 @@
+$kind: collection
+name: 냉털 API
+variables:
+  - key: base_url
+    value: http://127.0.0.1:4000/api
+scripts:
+  - type: http:beforeRequest
+    language: text/javascript
+    code: |-
+      if (!pm.collectionVariables.get('email')) {
+        pm.collectionVariables.set('email', `user_${Date.now()}@example.com`);
+        pm.collectionVariables.set('password', 'password1234');
+      }

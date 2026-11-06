@@ -1,0 +1,12 @@
+$kind: http-request
+method: POST
+url: '{{base_url}}/ingredients/{{ingredientId}}/consume'
+order: 8000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('소비 완료로 바뀐다', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().data.status).to.eql('CONSUMED');
+      });

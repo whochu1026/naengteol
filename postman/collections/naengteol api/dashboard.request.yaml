@@ -1,0 +1,14 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/dashboard'
+order: 7000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const data = pm.response.json().data;
+      pm.test('대시보드는 보유 재료를 집계한다', () => {
+        pm.response.to.have.status(200);
+        pm.expect(data.total).to.eql(1);
+        pm.expect(data.expiring).to.eql(1);
+      });

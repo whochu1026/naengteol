@@ -1,0 +1,10 @@
+$kind: http-request
+name: me after logout
+method: GET
+url: '{{base_url}}/auth/me'
+order: 10000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('로그아웃한 토큰은 거절된다', () => pm.response.to.have.status(401));

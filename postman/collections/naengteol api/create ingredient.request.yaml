@@ -1,0 +1,35 @@
+$kind: http-request
+name: create ingredient
+method: POST
+url: '{{base_url}}/ingredients'
+order: 5000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "우유",
+      "categoryId": "{{categoryId}}",
+      "quantity": 1,
+      "unit": "개",
+      "storageType": "REFRIGERATED",
+      "expirationDate": "{{expirationDate}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      const seoul = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const tomorrow = new Date(Date.UTC(seoul.getUTCFullYear(), seoul.getUTCMonth(), seoul.getUTCDate() + 1));
+      pm.collectionVariables.set('expirationDate', tomorrow.toISOString().slice(0, 10));
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const body = pm.response.json();
+      pm.test('식재료 등록은 201이다', () => pm.response.to.have.status(201));
+      pm.test('내일 유통기한은 임박이다', () => {
+        pm.expect(body.data.freshness).to.eql('EXPIRING');
+      });
+      pm.collectionVariables.set('ingredientId', body.data.id);

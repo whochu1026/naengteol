@@ -1,0 +1,26 @@
+$kind: http-request
+method: POST
+url: '{{base_url}}/auth/signup'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{email}}",
+      "password": "{{password}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const body = pm.response.json();
+      pm.test('회원가입은 201이다', () => pm.response.to.have.status(201));
+      pm.test('이메일은 소문자로 저장된다', () => {
+        pm.expect(body.data.email).to.eql(pm.collectionVariables.get('email'));
+      });
+      pm.test('비밀번호는 응답에 없다', () => {
+        pm.expect(body.data).to.not.have.property('password');
+      });

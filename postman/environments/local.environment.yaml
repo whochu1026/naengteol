@@ -1,0 +1,7 @@
+name: local
+values:
+  - key: base_url
+    value: http://127.0.0.1:4000/api
+    enabled: true
+    type: default
+    description: 냉털 API 주소

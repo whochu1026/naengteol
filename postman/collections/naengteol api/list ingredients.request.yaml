@@ -1,0 +1,13 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/ingredients?keyword=우유&status=ACTIVE'
+order: 6000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      const body = pm.response.json();
+      pm.test('검색 결과에 방금 등록한 식재료가 있다', () => {
+        pm.response.to.have.status(200);
+        pm.expect(body.data.items[0].id).to.eql(pm.collectionVariables.get('ingredientId'));
+      });

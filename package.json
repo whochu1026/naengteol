@@ -1,0 +1,21 @@
+{
+  "name": "naengteol",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint",
+    "test": "npm --prefix backend test",
+    "typecheck": "npm --prefix backend exec -- tsc --noEmit && npm --prefix frontend exec -- tsc --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

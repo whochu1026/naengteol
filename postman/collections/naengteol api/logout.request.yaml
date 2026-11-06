@@ -1,0 +1,9 @@
+$kind: http-request
+method: POST
+url: '{{base_url}}/auth/logout'
+order: 9000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('로그아웃은 200이다', () => pm.response.to.have.status(200));
