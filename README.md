@@ -63,9 +63,21 @@ cp backend/.env.example backend/.env
 
 ### 실행
 
-API 서버와 웹 서버를 동시에 실행합니다.
+**한 번에 실행**
+
+| OS | 방법 |
+|----|------|
+| macOS | Finder에서 `start.command` 더블클릭 |
+| Windows | 탐색기에서 `start.bat` 더블클릭 |
+
+의존성 설치(필요 시)·`.env` 생성·`npm run dev`까지 자동으로 진행됩니다.
+
+또는 터미널에서:
 
 ```bash
+./start.command   # macOS / Linux
+start.bat         # Windows
+# 또는
 npm run dev
 ```
 
