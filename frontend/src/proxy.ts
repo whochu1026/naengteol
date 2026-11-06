@@ -5,7 +5,7 @@ const COOKIE = "naengteol_token";
 const PROTECTED = ["/dashboard", "/ingredients", "/plan", "/consumed", "/stats", "/trash", "/account"];
 const AUTH_PAGES = ["/login", "/signup"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const token = request.cookies.get(COOKIE)?.value;
   const { pathname } = request.nextUrl;
 

@@ -8,7 +8,7 @@ import { BrandLink } from "@/components/BrandLink";
 import { api } from "@/lib/api";
 import { showExpiryBrowserNotifications } from "@/lib/notifications";
 import type { User } from "@/lib/types";
-import { LoadingBlock, selectedTabClass } from "./ui";
+import { FullPageLoading, selectedTabClass } from "./ui";
 
 function isCurrent(pathname: string, href: string) {
   if (href === "/ingredients") return pathname === "/ingredients" || pathname.startsWith("/ingredients/");
@@ -181,11 +181,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (loading) {
-    return (
-      <div className="grid min-h-screen place-items-center">
-        <LoadingBlock />
-      </div>
-    );
+    return <FullPageLoading label="냉장고를 여는 중..." />;
   }
 
   if (!user) return null;

@@ -227,8 +227,38 @@ export function StatusBadge({ freshness }: { freshness: Freshness }) {
 
 export function LoadingBlock({ label = "불러오는 중..." }: { label?: string }) {
   return (
-    <div className={"grid min-h-56 place-items-center px-6 py-12 text-sm text-muted md:min-h-64"} role="status">
-      {label}
+    <div className="grid min-h-56 place-items-center px-6 py-12 md:min-h-64" role="status" aria-live="polite" aria-busy="true">
+      <div className="flex flex-col items-center gap-3.5">
+        <span
+          className="size-9 animate-spin rounded-full border-[2.5px] border-brand/15 border-t-brand"
+          aria-hidden="true"
+        />
+        <p className="text-sm font-medium tracking-tight text-muted">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+/** 세션·첫 진입 등 화면 전체가 비어 있을 때 */
+export function FullPageLoading({ label = "불러오는 중..." }: { label?: string }) {
+  return (
+    <div className="grid min-h-screen place-items-center px-6" role="status" aria-live="polite" aria-busy="true">
+      <div className="flex flex-col items-center gap-5">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-[var(--radius-control)] bg-brand text-white shadow-sm">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M4 10h16" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M9 6.5h.01M9 13.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">냉털</span>
+        </div>
+        <div className="flex flex-col items-center gap-3">
+          <span className="size-8 animate-spin rounded-full border-[2.5px] border-brand/15 border-t-brand" aria-hidden="true" />
+          <p className="text-sm font-medium tracking-tight text-muted">{label}</p>
+        </div>
+      </div>
     </div>
   );
 }
